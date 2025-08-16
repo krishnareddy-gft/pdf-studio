@@ -4,7 +4,7 @@ import {
   ChevronDown, Menu, X
 } from 'lucide-react'
 
-export default function TopNav() {
+export default function TopNav({ onNavigate }) {
   const [isAccountOpen, setIsAccountOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -40,7 +40,11 @@ export default function TopNav() {
           </button>
 
           {/* Brand */}
-          <div className="flex items-center gap-2">
+          <button 
+            onClick={() => onNavigate && onNavigate('home')}
+            className="flex items-center gap-2 hover:opacity-80 hover:scale-105 transition-all duration-200 cursor-pointer group"
+            title="Go to Dashboard"
+          >
             {/* If /brand-logo.png is present in /public it will be used. Otherwise fallback to CSS logomark */}
             {logoOk ? (
               <img
@@ -59,7 +63,7 @@ export default function TopNav() {
               </div>
             )}
             <span className="text-lg font-bold text-gray-900">PDF HelpDesk</span>
-          </div>
+          </button>
         </div>
 
         {/* Center Section - Search */}

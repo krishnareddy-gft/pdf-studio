@@ -126,7 +126,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Top Navigation Bar */}
-      <TopNav />
+      <TopNav onNavigate={setRoute} />
       
       <div className="flex flex-1">
         {/* Sidebar */}

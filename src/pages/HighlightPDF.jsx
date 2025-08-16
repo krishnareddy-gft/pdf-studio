@@ -355,7 +355,14 @@ export default function HighlightPDF() {
 
   return (
     <FileProcessor
-      title="Highlight Text"
+      title={
+        <div className="flex items-center gap-2">
+          <span>Highlight Text</span>
+          <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full font-medium animate-pulse">
+            NEW!
+          </span>
+        </div>
+      }
       description="Draw highlight boxes directly on the PDF preview. Use the toolbar above the preview."
       acceptedFileTypes=".pdf"
       maxFiles={1}
