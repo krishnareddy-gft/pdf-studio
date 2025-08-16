@@ -1,0 +1,71 @@
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#3b82f6" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="PDF HelpDesk" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="description" content="Professional PDF tools for converting, editing, and managing your documents" />
+    <meta name="keywords" content="PDF, convert, merge, compress, edit, tools, mobile, app" />
+    <meta name="author" content="PDF HelpDesk" />
+    <meta name="robots" content="index, follow" />
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Icons -->
+    <!-- Put your provided logo as /public/brand-logo.png (512x512 suggested). It will be used in nav; favicon below -->
+    <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    
+    <!-- Preconnect to external resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    
+    <title>PDF HelpDesk</title>
+    <script type="module" crossorigin src="/assets/index-40EH8J_y.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-D-XgqoRR.js">
+    <link rel="modulepreload" crossorigin href="/assets/ui-DEqclEqk.js">
+    <link rel="modulepreload" crossorigin href="/assets/pdf-DczKwt9Q.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-wotqODGF.css">
+  </head>
+  <body class="bg-zinc-50">
+    <div id="root"></div>
+    
+    <!-- PWA Install Prompt -->
+    <script>
+      // PWA install prompt
+      let deferredPrompt;
+      
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        
+        // Show install button or prompt
+        const installButton = document.createElement('button');
+        installButton.textContent = 'Install PDF HelpDesk';
+        installButton.className = 'fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+        installButton.onclick = () => {
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then((choiceResult) => {
+            if (choiceResult.outcome === 'accepted') {
+              console.log('User accepted the install prompt');
+            }
+            deferredPrompt = null;
+          });
+        };
+        document.body.appendChild(installButton);
+      });
+    </script>
+  </body>
+</html>

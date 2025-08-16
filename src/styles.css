@@ -1,0 +1,95 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Mobile-first responsive design */
+* {
+  box-sizing: border-box;
+}
+
+/* Touch-friendly button sizes */
+button, [role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Smooth scrolling for mobile */
+html {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { 
+  width: 8px; 
+  height: 8px; 
+}
+
+::-webkit-scrollbar-thumb { 
+  background: #d1d5db; 
+  border-radius: 999px; 
+}
+
+::-webkit-scrollbar-thumb:hover { 
+  background: #9ca3af; 
+}
+
+/* Sidebar specific styles */
+.sidebar {
+  width: 192px; /* Much thinner sidebar width (w-48) */
+}
+
+/* Top navigation styles */
+.top-nav {
+  height: 64px; /* Fixed height for top navigation */
+}
+
+/* Main content adjustment for top nav */
+.main-content {
+  margin-top: 64px; /* Account for top navigation height */
+}
+
+/* Mobile-specific styles */
+@media (max-width: 768px) {
+  /* Ensure proper touch targets */
+  .touch-target {
+    min-height: 48px;
+    min-width: 48px;
+  }
+  
+  /* Mobile-friendly spacing */
+  .mobile-padding {
+    padding: 1rem;
+  }
+  
+  /* Mobile-friendly text sizes */
+  .mobile-text {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+}
+
+/* App store ready styles */
+.app-container {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* Smooth animations */
+.animate-smooth {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Focus states for accessibility */
+.focus-visible:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Dark mode support (future enhancement) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-primary: #1f2937;
+    --text-primary: #f9fafb;
+  }
+}

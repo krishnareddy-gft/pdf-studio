@@ -1,0 +1,77 @@
+{
+  "name": "PDF HelpDesk",
+  "short_name": "PDF HelpDesk",
+  "description": "Professional PDF tools for converting, editing, and managing your documents",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
+  "categories": ["productivity", "utilities", "business"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Merge PDFs",
+      "short_name": "Merge",
+      "description": "Combine multiple PDFs into one",
+      "url": "/?tool=merge",
+      "icons": [
+        {
+          "src": "/icon-merge.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Convert Images",
+      "short_name": "Convert",
+      "description": "Convert images to PDF",
+      "url": "/?tool=imagetopdf",
+      "icons": [
+        {
+          "src": "/icon-convert.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "edge_side_panel": {
+    "preferred_width": 400
+  }
+}
