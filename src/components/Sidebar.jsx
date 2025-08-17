@@ -24,13 +24,7 @@ const categories = [
       { key: 'imagetopdf', label: 'Image → PDF', desc: 'Convert JPG/PNG to PDF' },
       { key: 'pdftoimages', label: 'PDF → Images', desc: 'Export PDF as PNG/JPG' },
       { key: 'wordtopdf', label: 'Word → PDF', desc: 'Convert DOC/DOCX to PDF' },
-      { key: 'pdftoword', label: 'PDF → Word', desc: 'Convert PDF to DOCX' },
-      { key: 'exceltopdf', label: 'Excel → PDF', desc: 'Convert XLS/XLSX to PDF' },
-      { key: 'pdftoexcel', label: 'PDF → Excel', desc: 'Convert PDF to XLSX' },
-      { key: 'ppttopdf', label: 'PowerPoint → PDF', desc: 'Convert PPT/PPTX to PDF' },
-      { key: 'pdftoppt', label: 'PDF → PowerPoint', desc: 'Convert PDF to PPTX' },
-      { key: 'htmltopdf', label: 'HTML → PDF', desc: 'Convert web pages to PDF' },
-      { key: 'texttopdf', label: 'Text → PDF', desc: 'Convert TXT files to PDF' }
+      { key: 'pdftoword', label: 'PDF → Word', desc: 'Convert PDF to DOCX' }
     ]
   },
   {
@@ -41,11 +35,7 @@ const categories = [
       { key: 'merge', label: 'Merge PDFs', desc: 'Combine multiple PDFs' },
       { key: 'split', label: 'Split PDF', desc: 'Split PDF into multiple files' },
       { key: 'organize', label: 'Reorder/Rotate', desc: 'Rearrange and rotate pages' },
-      { key: 'extract', label: 'Extract Pages', desc: 'Extract specific pages' },
-      { key: 'insert', label: 'Insert Pages', desc: 'Insert pages into PDF' },
-      { key: 'delete', label: 'Delete Pages', desc: 'Remove unwanted pages' },
-      { key: 'bookmarks', label: 'Add Bookmarks', desc: 'Create PDF bookmarks' },
-      { key: 'outline', label: 'PDF Outline', desc: 'Generate table of contents' }
+      { key: 'extract', label: 'Extract Pages', desc: 'Extract specific pages' }
     ]
   },
   {
@@ -54,13 +44,8 @@ const categories = [
     icon: Edit3,
     items: [
       { key: 'edittext', label: 'Edit Text', desc: 'Modify PDF text content' },
-      { key: 'editimages', label: 'Edit Images', desc: 'Modify PDF images' },
       { key: 'addtext', label: 'Add Text', desc: 'Insert new text blocks' },
-      { key: 'addimages', label: 'Add Images', desc: 'Insert images into PDF' },
-      { key: 'highlight', label: 'Highlight Text', desc: 'Highlight important text' },
-      { key: 'underline', label: 'Underline Text', desc: 'Underline text content' },
-      { key: 'strikethrough', label: 'Strike Text', desc: 'Strike through text' },
-      { key: 'draw', label: 'Draw & Annotate', desc: 'Freehand drawing tools' }
+      { key: 'highlight', label: 'Highlight Text', desc: 'Highlight important text' }
     ]
   },
   {
@@ -71,8 +56,7 @@ const categories = [
       { key: 'compress', label: 'Compress PDF', desc: 'Reduce file size' },
       { key: 'ocr', label: 'OCR PDF', desc: 'Extract text from images' },
       { key: 'optimize', label: 'Optimize PDF', desc: 'Improve PDF quality' },
-      { key: 'reduce', label: 'Reduce Size', desc: 'Advanced compression' },
-      { key: 'quality', label: 'Quality Settings', desc: 'Customize compression' }
+      { key: 'reduce', label: 'Reduce Size', desc: 'Advanced compression' }
     ]
   },
   {
@@ -81,29 +65,12 @@ const categories = [
     icon: ShieldCheck,
     items: [
       { key: 'sign', label: 'eSign PDF', desc: 'Digital signatures' },
-      { key: 'certificate', label: 'Certificate Sign', desc: 'Certificate-based signing' },
       { key: 'password', label: 'Password Protect', desc: 'Add password security' },
       { key: 'encrypt', label: 'Encrypt PDF', desc: 'Advanced encryption' },
-      { key: 'permissions', label: 'Set Permissions', desc: 'Control access rights' },
-      { key: 'watermark', label: 'Add Watermark', desc: 'Brand your documents' },
-      { key: 'redact', label: 'Redact Content', desc: 'Remove sensitive info' }
+      { key: 'watermark', label: 'Add Watermark', desc: 'Brand your documents' }
     ]
   },
-  {
-    key: 'tools',
-    label: 'More Tools',
-    icon: Wrench,
-    items: [
-      { key: 'compare', label: 'Compare PDFs', desc: 'Find differences' },
-      { key: 'search', label: 'Search PDF', desc: 'Find text in PDF' },
-      { key: 'forms', label: 'Fill Forms', desc: 'Complete PDF forms' },
-      { key: 'flatten', label: 'Flatten PDF', desc: 'Make uneditable' },
-      { key: 'metadata', label: 'Edit Metadata', desc: 'Modify PDF info' },
-      { key: 'repair', label: 'Repair PDF', desc: 'Fix corrupted files' },
-      { key: 'validate', label: 'Validate PDF', desc: 'Check PDF compliance' },
-      { key: 'batch', label: 'Batch Process', desc: 'Process multiple files' }
-    ]
-  }
+
 ]
 
 export default function Sidebar({ onNavigate, active, isMobile, isOpen, onClose }) {

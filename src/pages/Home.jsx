@@ -2,7 +2,7 @@
 import React from 'react'
 import ToolCard from '../components/ToolCard.jsx'
 import { 
-  FileText, Images, Layers, Edit3, Scissors, ShieldCheck, Wrench,
+  FileText, Images, Layers, Edit3, Scissors, ShieldCheck,
   ArrowRight, Star, Zap, Shield, Palette, Clock
 } from 'lucide-react'
 
@@ -19,11 +19,7 @@ export default function Home({ navigate }) {
         { key: 'imagetopdf', title: 'Image → PDF', desc: 'Convert JPG/PNG to PDF' },
         { key: 'pdftoimages', title: 'PDF → Images', desc: 'Export PDF as PNG/JPG' },
         { key: 'wordtopdf', title: 'Word → PDF', desc: 'Convert DOC/DOCX to PDF' },
-        { key: 'pdftoword', title: 'PDF → Word', desc: 'Convert PDF to DOCX' },
-        { key: 'exceltopdf', title: 'Excel → PDF', desc: 'Convert XLS/XLSX to PDF' },
-        { key: 'ppttopdf', title: 'PowerPoint → PDF', desc: 'Convert PPT/PPTX to PDF' },
-        { key: 'htmltopdf', title: 'HTML → PDF', desc: 'Convert web pages to PDF' },
-        { key: 'texttopdf', title: 'Text → PDF', desc: 'Convert TXT files to PDF' }
+        { key: 'pdftoword', title: 'PDF → Word', desc: 'Convert PDF to DOCX' }
       ]
     },
     {
@@ -37,11 +33,7 @@ export default function Home({ navigate }) {
         { key: 'merge', title: 'Merge PDFs', desc: 'Combine multiple PDFs' },
         { key: 'split', title: 'Split PDF', desc: 'Split PDF into multiple files' },
         { key: 'organize', title: 'Reorder/Rotate', desc: 'Rearrange and rotate pages' },
-        { key: 'extract', title: 'Extract Pages', desc: 'Extract specific pages' },
-        { key: 'insert', title: 'Insert Pages', desc: 'Insert pages into PDF' },
-        { key: 'delete', title: 'Delete Pages', desc: 'Remove unwanted pages' },
-        { key: 'bookmarks', title: 'Add Bookmarks', desc: 'Create PDF bookmarks' },
-        { key: 'outline', title: 'PDF Outline', desc: 'Generate table of contents' }
+        { key: 'extract', title: 'Extract Pages', desc: 'Extract specific pages' }
       ]
     },
     {
@@ -54,12 +46,7 @@ export default function Home({ navigate }) {
       tools: [
         { key: 'edittext', title: 'Edit Text', desc: 'Modify PDF text content' },
         { key: 'addtext', title: 'Add Text', desc: 'Insert new text blocks' },
-        { key: 'highlight', title: 'Highlight Text', desc: 'Highlight important text' },
-        { key: 'underline', title: 'Underline Text', desc: 'Underline text content' },
-        { key: 'strikethrough', title: 'Strike Text', desc: 'Strike through text' },
-        { key: 'draw', title: 'Draw & Annotate', desc: 'Freehand drawing tools' },
-        { key: 'editimages', title: 'Edit Images', desc: 'Modify PDF images' },
-        { key: 'addimages', title: 'Add Images', desc: 'Insert images into PDF' }
+        { key: 'highlight', title: 'Highlight Text', desc: 'Highlight important text' }
       ]
     },
     {
@@ -73,8 +60,7 @@ export default function Home({ navigate }) {
         { key: 'compress', title: 'Compress PDF', desc: 'Reduce file size while maintaining quality' },
         { key: 'ocr', title: 'OCR PDF', desc: 'Extract text from images' },
         { key: 'optimize', title: 'Optimize PDF', desc: 'Improve PDF quality' },
-        { key: 'reduce', title: 'Reduce Size', desc: 'Advanced compression options' },
-        { key: 'quality', title: 'Quality Settings', desc: 'Customize compression settings' }
+        { key: 'reduce', title: 'Reduce Size', desc: 'Advanced compression options' }
       ]
     },
     {
@@ -88,30 +74,10 @@ export default function Home({ navigate }) {
         { key: 'sign', title: 'eSign PDF', desc: 'Add digital signatures' },
         { key: 'password', title: 'Password Protect', desc: 'Add password security' },
         { key: 'watermark', title: 'Add Watermark', desc: 'Brand your documents' },
-        { key: 'encrypt', title: 'Encrypt PDF', desc: 'Advanced encryption' },
-        { key: 'permissions', title: 'Set Permissions', desc: 'Control access rights' },
-        { key: 'redact', title: 'Redact Content', desc: 'Remove sensitive information' },
-        { key: 'certificate', title: 'Certificate Sign', desc: 'Certificate-based signing' }
+        { key: 'encrypt', title: 'Encrypt PDF', desc: 'Advanced encryption' }
       ]
     },
-    {
-      id: 'tools',
-      title: 'More Tools',
-      icon: Wrench,
-      color: 'from-gray-500 to-gray-600',
-      bgColor: 'bg-gray-50',
-      borderColor: 'border-gray-200',
-      tools: [
-        { key: 'compare', title: 'Compare PDFs', desc: 'Find differences between PDFs' },
-        { key: 'search', title: 'Search PDF', desc: 'Find text in PDF documents' },
-        { key: 'forms', title: 'Fill Forms', desc: 'Complete PDF forms' },
-        { key: 'flatten', title: 'Flatten PDF', desc: 'Make PDF uneditable' },
-        { key: 'metadata', title: 'Edit Metadata', desc: 'Modify PDF information' },
-        { key: 'repair', title: 'Repair PDF', desc: 'Fix corrupted PDF files' },
-        { key: 'validate', title: 'Validate PDF', desc: 'Check PDF compliance' },
-        { key: 'batch', title: 'Batch Process', desc: 'Process multiple files' }
-      ]
-    }
+
   ]
 
   // Popular tools selection - now with 8 tools
