@@ -3,17 +3,24 @@ import {
   Bell, User, Settings, LogOut, 
   ChevronDown, Menu, X
 } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
-export default function TopNav({ onNavigate }) {
+export default function TopNav({ onNavigate, onOpenAuth }) {
   const [isAccountOpen, setIsAccountOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [logoOk, setLogoOk] = useState(true)
+  const { currentUser, logout } = useAuth()
 
-  const handleLogout = () => {
-    // Implement logout functionality
-    console.log('Logging out...')
-    setIsAccountOpen(false)
+  const handleLogout = async () => {
+    try {
+      await logout()
+      setIsAccountOpen(false)
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
   }
+
+
 
   return (
     <nav className="bg-white border-b border-gray-200 px-4 py-3 shadow-sm">
@@ -64,73 +71,81 @@ export default function TopNav({ onNavigate }) {
 
         {/* Right Section - Actions & Account */}
         <div className="flex items-center gap-3">
+          {currentUser ? (
+            <>
+              {/* Notifications */}
+              <button className="p-2 rounded-lg hover:bg-gray-100 transition-colors relative">
+                <Bell className="w-5 h-5 text-gray-600" />
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
+              </button>
 
+              {/* Account Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setIsAccountOpen(!isAccountOpen)}
+                  className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                    <User className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="hidden sm:block text-sm font-medium text-gray-700">
+                    {currentUser.displayName || currentUser.email}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isAccountOpen ? 'rotate-180' : ''}`} />
+                </button>
 
-          {/* Notifications */}
-          <button className="p-2 rounded-lg hover:bg-gray-100 transition-colors relative">
-            <Bell className="w-5 h-5 text-gray-600" />
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
-          </button>
-
-          {/* Account Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setIsAccountOpen(!isAccountOpen)}
-              className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                <User className="w-4 h-4 text-white" />
+                {/* Account Dropdown Menu */}
+                {isAccountOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                    <div className="px-4 py-2 border-b border-gray-100">
+                      <p className="text-sm font-medium text-gray-900">
+                        {currentUser.displayName || 'User'}
+                      </p>
+                      <p className="text-xs text-gray-500">{currentUser.email}</p>
+                    </div>
+                    
+                    <div className="py-1">
+                      <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                        <User className="w-4 h-4" />
+                        Profile
+                      </button>
+                      <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                        <Settings className="w-4 h-4" />
+                        Settings
+                      </button>
+                      <button 
+                        onClick={handleLogout}
+                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Sign Out
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-              <span className="hidden sm:block text-sm font-medium text-gray-700">Account</span>
-              <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isAccountOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {/* Account Dropdown Menu */}
-            {isAccountOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                <div className="px-4 py-2 border-b border-gray-100">
-                  <p className="text-sm font-medium text-gray-900">John Doe</p>
-                  <p className="text-xs text-gray-500">john.doe@example.com</p>
-                </div>
-                
-                <div className="py-1">
-                  <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                    <User className="w-4 h-4" />
-                    Profile
-                  </button>
-                  <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                    <Settings className="w-4 h-4" />
-                    Settings
-                  </button>
-                  <button 
-                    onClick={handleLogout}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Sign Out
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+            </>
+          ) : (
+            /* Login/Signup Buttons */
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => onOpenAuth && onOpenAuth()}
+                className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium transition-colors"
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => onOpenAuth && onOpenAuth()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+              >
+                Get Started
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Mobile Search Bar */}
-      {isMobileMenuOpen && (
-        <div className="mt-3 md:hidden">
-          <form onSubmit={handleSearch} className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search tools..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </form>
-        </div>
-      )}
+
     </nav>
   )
 }

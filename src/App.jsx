@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react'
 import Sidebar from './components/Sidebar.jsx'
 import TopNav from './components/TopNav.jsx'
+import AuthModal from './components/AuthModal.jsx'
+import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
 import Home from './pages/Home.jsx'
 import MergePDF from './pages/MergePDF.jsx'
 import ImageToPDF from './pages/ImageToPDF.jsx'
@@ -72,10 +74,11 @@ const routes = {
   repairpdf: () => <PlaceholderTool title="Repair PDF" desc="Fix corrupted or damaged PDF files to restore functionality" />
 }
 
-export default function App() {
+function AppContent() {
   const [route, setRoute] = useState('home')
   const [isMobile, setIsMobile] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
 
   useEffect(() => {
     const checkMobile = () => {
@@ -93,7 +96,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Top Navigation Bar */}
-      <TopNav onNavigate={setRoute} />
+      <TopNav onNavigate={setRoute} onOpenAuth={() => setIsAuthModalOpen(true)} />
       
       <div className="flex flex-1">
         {/* Sidebar */}
@@ -123,6 +126,20 @@ export default function App() {
           />
         )}
       </div>
+
+      {/* Authentication Modal */}
+      <AuthModal 
+        isOpen={isAuthModalOpen} 
+        onClose={() => setIsAuthModalOpen(false)} 
+      />
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }
