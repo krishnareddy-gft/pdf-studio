@@ -64,7 +64,12 @@ const routes = {
   // Security tools
   password: () => <PlaceholderTool title="Password Protect" desc="Add password security to PDF documents" />,
   encrypt: () => <PlaceholderTool title="Encrypt PDF" desc="Advanced PDF encryption options" />,
-  watermark: WatermarkPDF
+  watermark: WatermarkPDF,
+  
+  // Popular tools
+  unlockpdf: () => <PlaceholderTool title="Unlock PDF" desc="Remove password protection and restrictions from PDF documents" />,
+  lockpdf: () => <PlaceholderTool title="Lock PDF" desc="Add password protection and security restrictions to PDF files" />,
+  repairpdf: () => <PlaceholderTool title="Repair PDF" desc="Fix corrupted or damaged PDF files to restore functionality" />
 }
 
 export default function App() {

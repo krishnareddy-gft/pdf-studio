@@ -32,7 +32,6 @@ export default function Home({ navigate }) {
       tools: [
         { key: 'merge', title: 'Merge PDFs', desc: 'Combine multiple PDFs' },
         { key: 'split', title: 'Split PDF', desc: 'Split PDF into multiple files' },
-        { key: 'organize', title: 'Reorder/Rotate', desc: 'Rearrange and rotate pages' },
         { key: 'extract', title: 'Extract Pages', desc: 'Extract specific pages' }
       ]
     },
@@ -74,22 +73,45 @@ export default function Home({ navigate }) {
         { key: 'sign', title: 'eSign PDF', desc: 'Add digital signatures' },
         { key: 'password', title: 'Password Protect', desc: 'Add password security' },
         { key: 'watermark', title: 'Add Watermark', desc: 'Brand your documents' },
-        { key: 'encrypt', title: 'Encrypt PDF', desc: 'Advanced encryption' }
+        { key: 'encrypt', title: 'Encrypt PDF', desc: 'Advanced encryption' },
+        { key: 'lockpdf', title: 'Lock PDF', desc: 'Add password protection' },
+        { key: 'unlockpdf', title: 'Unlock PDF', desc: 'Remove password protection' }
+      ]
+    },
+    {
+      id: 'tools',
+      title: 'Tools & Maintenance',
+      icon: Clock,
+      color: 'from-indigo-500 to-indigo-600',
+      bgColor: 'bg-indigo-50',
+      borderColor: 'border-indigo-200',
+      tools: [
+        { key: 'repairpdf', title: 'Repair PDF', desc: 'Fix corrupted or damaged files' },
+        { key: 'organize', title: 'Reorder/Rotate', desc: 'Rearrange and rotate pages' }
       ]
     },
 
   ]
 
-  // Popular tools selection - now with 8 tools
+  // Popular tools selection - first 4 must be: Merge, Compress, Split, eSign
   const popularTools = [
-    { key: 'imagetopdf', title: 'Image → PDF', desc: 'Convert JPG/PNG to PDF', category: 'convert' },
+    // Top 4 most important tools (must be first)
     { key: 'merge', title: 'Merge PDFs', desc: 'Combine multiple PDFs', category: 'organize' },
-    { key: 'split', title: 'Split PDF', desc: 'Split PDF into multiple files', category: 'organize' },
-    { key: 'pdftoword', title: 'PDF → Word', desc: 'Convert PDF to DOCX', category: 'convert' },
     { key: 'compress', title: 'Compress PDF', desc: 'Reduce file size while maintaining quality', category: 'compress' },
+    { key: 'split', title: 'Split PDF', desc: 'Split PDF into multiple files', category: 'organize' },
+    { key: 'sign', title: 'eSign PDF', desc: 'Add digital signatures', category: 'sign' },
+    
+    // Second 4 tools: Edit Text, Highlight Text, Image to PDF, Word to PDF
     { key: 'edittext', title: 'Edit Text', desc: 'Modify PDF text content', category: 'edit' },
     { key: 'highlight', title: 'Highlight Text', desc: 'Highlight important text', category: 'edit' },
-    { key: 'sign', title: 'eSign PDF', desc: 'Add digital signatures', category: 'sign' }
+    { key: 'imagetopdf', title: 'Image → PDF', desc: 'Convert JPG/PNG to PDF', category: 'convert' },
+    { key: 'wordtopdf', title: 'Word → PDF', desc: 'Convert DOC/DOCX to PDF', category: 'convert' },
+    
+    // Additional popular tools
+    { key: 'pdftoword', title: 'PDF → Word', desc: 'Convert PDF to DOCX', category: 'convert' },
+    { key: 'unlockpdf', title: 'Unlock PDF', desc: 'Remove password protection', category: 'security' },
+    { key: 'lockpdf', title: 'Lock PDF', desc: 'Add password security', category: 'security' },
+    { key: 'repairpdf', title: 'Repair PDF', desc: 'Fix corrupted files', category: 'tools' }
   ]
 
   return (
@@ -102,6 +124,9 @@ export default function Home({ navigate }) {
         <p className="text-sm text-gray-600 max-w-xl mx-auto leading-relaxed">
           Transform, edit, and manage your PDF documents with our comprehensive suite of professional tools.
         </p>
+        <div className="text-sm text-gray-500">
+          Developed by <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent font-bold text-lg">Lokanex</span>
+        </div>
         <div className="flex flex-wrap justify-center gap-2 text-xs text-gray-500">
           <div className="flex items-center gap-1.5">
             <Shield className="w-3.5 h-3.5 text-green-500" />
@@ -140,34 +165,7 @@ export default function Home({ navigate }) {
         </div>
       </div>
 
-      {/* All Categories */}
-      <div className="space-y-6">
-        <h2 className="text-xl font-bold text-gray-900 text-center">Complete Tool Collection</h2>
-        
-        {categories.map(category => (
-          <div key={category.id} className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg bg-gradient-to-r ${category.color} text-white`}>
-                <category.icon className="w-5 h-5" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900">{category.title}</h3>
-              <div className="flex-1 h-px bg-gradient-to-r from-gray-200 to-transparent"></div>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-              {category.tools.map(tool => (
-                <ToolCard
-                  key={tool.key}
-                  title={tool.title}
-                  desc={tool.desc}
-                  onClick={() => navigate(tool.key)}
-                  category={category.id}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+
 
       {/* Features Section */}
       <div className="bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl p-6">

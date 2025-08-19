@@ -1,20 +1,13 @@
 import React, { useState } from 'react'
 import { 
-  Search, Bell, User, Settings, LogOut, 
+  Bell, User, Settings, LogOut, 
   ChevronDown, Menu, X
 } from 'lucide-react'
 
 export default function TopNav({ onNavigate }) {
   const [isAccountOpen, setIsAccountOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
   const [logoOk, setLogoOk] = useState(true)
-
-  const handleSearch = (e) => {
-    e.preventDefault()
-    // Implement search functionality
-    console.log('Searching for:', searchQuery)
-  }
 
   const handleLogout = () => {
     // Implement logout functionality
@@ -66,26 +59,12 @@ export default function TopNav({ onNavigate }) {
           </button>
         </div>
 
-        {/* Center Section - Search */}
-        <div className="flex-1 max-w-md mx-4 hidden md:block">
-          <form onSubmit={handleSearch} className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search tools..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </form>
-        </div>
+        {/* Center Section - Spacer */}
+        <div className="flex-1"></div>
 
         {/* Right Section - Actions & Account */}
         <div className="flex items-center gap-3">
-          {/* Search Button for Mobile */}
-          <button className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors">
-            <Search className="w-5 h-5 text-gray-600" />
-          </button>
+
 
           {/* Notifications */}
           <button className="p-2 rounded-lg hover:bg-gray-100 transition-colors relative">
