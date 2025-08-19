@@ -1,1431 +1,1297 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { 
+  Upload, X, Plus, Download, Eye, FileText, Image, 
+  Archive, CheckCircle, AlertCircle, Loader2, Trash2, Edit3,
+  ChevronLeft, ChevronRight, Type, PenTool, Save, RotateCcw,
+  Move, Maximize2, Minimize2, Settings, User, Image as ImageIcon
+} from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist/build/pdf'
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import { PDFDocument, PDFPage, rgb, StandardFonts } from 'pdf-lib'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
 
-export default function SignPDF() {
-  // PDF State
+export default function SignPDF({ navigate }) {
   const [pdfFile, setPdfFile] = useState(null)
   const [pdfDocument, setPdfDocument] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
-  const [numPages, setNumPages] = useState(0)
-  const [scale, setScale] = useState(2.0) // Default to 200% zoom
-  const [pageDimensions, setPageDimensions] = useState({ width: 0, height: 0 })
-  const [isRendering, setIsRendering] = useState(false)
-  const [allPages, setAllPages] = useState([])
-  const [totalHeight, setTotalHeight] = useState(0)
-  
-  // UI State
-  const [mode, setMode] = useState('view') // 'view', 'sign', 'fill'
-  const [showSignaturePad, setShowSignaturePad] = useState(false)
-  const [showUploadModal, setShowUploadModal] = useState(false)
-  
-  // Signature State
+  const [totalPages, setTotalPages] = useState(0)
+  const [scale, setScale] = useState(1.5)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isPageLoading, setIsPageLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [activeTab, setActiveTab] = useState('sign') // 'sign' or 'edit'
   const [signatures, setSignatures] = useState([])
   const [selectedSignature, setSelectedSignature] = useState(null)
-  const [signaturePadData, setSignaturePadData] = useState('')
-  
-  // Text/Fill State
+  const [isDrawing, setIsDrawing] = useState(false)
+  const [drawingData, setDrawingData] = useState([])
   const [textElements, setTextElements] = useState([])
-  const [selectedTextElement, setSelectedTextElement] = useState(null)
-  const [editingElement, setEditingElement] = useState(null)
-  const [fontSize, setFontSize] = useState(11)
-  const [fontFamily, setFontFamily] = useState('Arial')
+  const [selectedElement, setSelectedElement] = useState(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [isResizing, setIsResizing] = useState(false)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 })
+  const [processedPdf, setProcessedPdf] = useState(null)
+  const [textPosition, setTextPosition] = useState({ x: 0, y: 0 })
   
-  // Refs
+  // Modal states
+  const [showSignatureModal, setShowSignatureModal] = useState(false)
+  const [showTextModal, setShowTextModal] = useState(false)
+  const [signatureMode, setSignatureMode] = useState('draw') // 'draw' or 'upload'
+  const [editingText, setEditingText] = useState('')
+  const [editingFontSize, setEditingFontSize] = useState(16)
+  const [editingFontFamily, setEditingFontFamily] = useState('helvetica')
+  
   const canvasRef = useRef(null)
-  const signaturePadRef = useRef(null)
+  const pdfContainerRef = useRef(null)
+  const signatureCanvasRef = useRef(null)
   const fileInputRef = useRef(null)
-  const containerRef = useRef(null)
-  
-  // Font options
-  const fontOptions = [
-    { value: 'Arial', label: 'Arial' },
-    { value: 'Helvetica', label: 'Helvetica' },
-    { value: 'Times New Roman', label: 'Times New Roman' },
-    { value: 'Courier New', label: 'Courier New' },
-    { value: 'Georgia', label: 'Georgia' },
-    { value: 'Verdana', label: 'Verdana' }
-  ]
+  const signatureUploadRef = useRef(null)
 
   // Load PDF file
-  const handleFileUpload = useCallback(async (file) => {
-    if (!file || file.type !== 'application/pdf') return
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0]
+    if (!file || file.type !== 'application/pdf') {
+      setError('Please select a valid PDF file')
+      return
+    }
+
+    setIsLoading(true)
+    setError(null)
     
     try {
       const arrayBuffer = await file.arrayBuffer()
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+      const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
       
       setPdfFile(file)
-      setPdfDocument(pdf)
-      setNumPages(pdf.numPages)
+      setPdfDocument(pdfDoc)
+      setTotalPages(pdfDoc.numPages)
       setCurrentPage(1)
-      
-      // Reset states
       setTextElements([])
-      setSelectedTextElement(null)
-      setSelectedSignature(null)
-      setMode('view')
+      setDrawingData([])
+      setSelectedElement(null)
       
-      // Render all pages for continuous scrolling
-      await renderAllPages(pdf)
-    } catch (error) {
-      console.error('Error loading PDF:', error)
-      alert('Error loading PDF file')
-    }
-  }, [])
-  
-  // Render all pages for continuous scrolling
-  const renderAllPages = useCallback(async (pdf) => {
-    if (!pdf) return
-    
-    setIsRendering(true)
-    
-    try {
-      const pages = []
-      let totalHeight = 0
-      
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        const page = await pdf.getPage(pageNum)
-        
-        // Get container dimensions for optimal scaling
-        const container = containerRef.current
-        if (!container) continue
-        
-        const containerWidth = container.clientWidth - 32
-        const containerHeight = container.clientHeight - 32
-        
-        // Calculate optimal scale to fit the page in the container
-        const pageViewport = page.getViewport({ scale: 1.0 })
-        const scaleX = containerWidth / pageViewport.width
-        const scaleY = containerHeight / pageViewport.height
-        const optimalScale = Math.min(scaleX, scaleY, 1.5)
-        
-        // Apply user zoom on top of optimal scale
-        const finalScale = optimalScale * scale
-        
-        const viewport = page.getViewport({ scale: finalScale })
-        
-        // Create canvas for this page
-        const canvas = document.createElement('canvas')
-        const context = canvas.getContext('2d')
-        
-        // Set canvas dimensions with high DPI for crisp rendering
-        const devicePixelRatio = window.devicePixelRatio || 1
-        canvas.width = viewport.width * devicePixelRatio
-        canvas.height = viewport.height * devicePixelRatio
-        
-        // Set CSS dimensions
-        canvas.style.width = `${viewport.width}px`
-        canvas.style.height = `${viewport.height}px`
-        
-        // Scale the context to account for device pixel ratio
-        context.scale(devicePixelRatio, devicePixelRatio)
-        
-        const renderContext = {
-          canvasContext: context,
-          viewport: viewport
-        }
-        
-        await page.render(renderContext).promise
-        
-        // Convert to data URL and store
-        const dataURL = canvas.toDataURL()
-        
-        pages.push({
-          pageNum,
-          canvas: dataURL,
-          width: viewport.width,
-          height: viewport.height,
-          y: totalHeight,
-          scale: finalScale
-        })
-        
-        totalHeight += viewport.height + 40 // Add more spacing between pages
-        
-        // Clean up canvas to prevent memory leaks and reuse issues
-        canvas.width = 0
-        canvas.height = 0
-      }
-      
-      setAllPages(pages)
-      setTotalHeight(totalHeight)
-    } catch (error) {
-      console.error('Error rendering all pages:', error)
+      // Load first page immediately
+      console.log('File uploaded, loading first page')
+      await loadPage(1, arrayBuffer)
+    } catch (err) {
+      setError('Failed to load PDF: ' + err.message)
     } finally {
-      setIsRendering(false)
+      setIsLoading(false)
     }
-  }, [scale])
+  }
 
-  // Render PDF page
-  const renderPage = useCallback(async () => {
-    if (!pdfDocument || !canvasRef.current) return
+  // Track rendering state to prevent concurrent operations
+  const renderingRef = useRef(false)
+  const renderTaskRef = useRef(null)
+
+  // Load specific page
+  const loadPage = async (pageNum, arrayBuffer) => {
+    if (!pdfDocument) return
     
-    setIsRendering(true)
+    // Cancel any ongoing render operation
+    if (renderTaskRef.current) {
+      try {
+        renderTaskRef.current.cancel()
+      } catch (e) {
+        // Ignore cancellation errors
+      }
+      renderTaskRef.current = null
+    }
+    
+    // Prevent concurrent rendering
+    if (renderingRef.current) {
+      console.log('Rendering already in progress, skipping...')
+      return
+    }
+    
+    renderingRef.current = true
+    setIsPageLoading(true)
     
     try {
-      const page = await pdfDocument.getPage(currentPage)
-      
-      // Get container dimensions for optimal scaling
-      const container = containerRef.current
-      if (!container) return
-      
-      const containerWidth = container.clientWidth - 32 // Account for padding (p-4 = 16px * 2)
-      const containerHeight = container.clientHeight - 32
-      
-      // Calculate optimal scale to fit the page in the container
-      const pageViewport = page.getViewport({ scale: 1.0 })
-      const scaleX = containerWidth / pageViewport.width
-      const scaleY = containerHeight / pageViewport.height
-      const optimalScale = Math.min(scaleX, scaleY, 1.5) // Reduced to allow more zoom control
-      
-      // Apply user zoom on top of optimal scale
-      const finalScale = optimalScale * scale
-      
-      const viewport = page.getViewport({ scale: finalScale })
+      console.log('Loading page:', pageNum)
+      const page = await pdfDocument.getPage(pageNum)
+      const viewport = page.getViewport({ scale })
       
       const canvas = canvasRef.current
+      if (!canvas) {
+        console.error('Canvas ref not available')
+        return
+      }
+      
       const context = canvas.getContext('2d')
       
-      // Set canvas dimensions with high DPI for crisp rendering
-      const devicePixelRatio = window.devicePixelRatio || 1
-      canvas.width = viewport.width * devicePixelRatio
-      canvas.height = viewport.height * devicePixelRatio
+      // Set canvas dimensions
+      canvas.width = viewport.width
+      canvas.height = viewport.height
       
-      // Set CSS dimensions
-      canvas.style.width = `${viewport.width}px`
-      canvas.style.height = `${viewport.height}px`
-      
-      // Scale the context to account for device pixel ratio
-      context.scale(devicePixelRatio, devicePixelRatio)
-      
-      setPageDimensions({
-        width: viewport.width,
-        height: viewport.height
-      })
+      // Clear canvas first
+      context.clearRect(0, 0, canvas.width, canvas.height)
       
       const renderContext = {
         canvasContext: context,
         viewport: viewport
       }
       
-      await page.render(renderContext).promise
-    } catch (error) {
-      console.error('Error rendering page:', error)
+      console.log('Rendering page with viewport:', { width: viewport.width, height: viewport.height })
+      
+      // Store the render task so we can cancel it if needed
+      renderTaskRef.current = page.render(renderContext)
+      await renderTaskRef.current.promise
+      renderTaskRef.current = null
+      
+      console.log('Page rendered successfully')
+      
+      // Update container size
+      if (pdfContainerRef.current) {
+        pdfContainerRef.current.style.width = `${viewport.width}px`
+        pdfContainerRef.current.style.height = `${viewport.height}px`
+        console.log('Container size updated:', { width: viewport.width, height: viewport.height })
+      }
+    } catch (err) {
+      if (err.name === 'RenderingCancelledException') {
+        console.log('Rendering was cancelled')
+      } else {
+        console.error('Error loading page:', err)
+        setError('Failed to load page: ' + err.message)
+      }
     } finally {
-      setIsRendering(false)
+      renderingRef.current = false
+      setIsPageLoading(false)
     }
-  }, [pdfDocument, currentPage, scale])
+  }
 
-  // Handle canvas click for placing elements
-  const handleCanvasClick = useCallback((event) => {
-    console.log('Canvas click triggered, editingElement:', editingElement, 'mode:', mode)
-    
-    // If we're editing an element, don't place new elements
-    if (editingElement) {
-      console.log('Currently editing element, cannot place new elements')
-      return
+  // Handle page navigation
+  const goToPage = async (pageNum) => {
+    if (pageNum >= 1 && pageNum <= totalPages) {
+      console.log('Navigating to page:', pageNum)
+      setCurrentPage(pageNum)
+      await loadPage(pageNum)
     }
-    
-    if (mode === 'view') return
-    
-    const container = event.currentTarget
-    const rect = container.getBoundingClientRect()
-    const scrollTop = container.scrollTop || 0
-    
-    // Calculate actual click position relative to the container
-    const x = event.clientX - rect.left
-    const y = event.clientY - rect.top + scrollTop
-    
-    // Determine which page was clicked based on y position
-    let clickedPage = 1
-    let pageOffset = 0
-    let pageScale = 1
-    
-    for (let i = allPages.length - 1; i >= 0; i--) {
-      if (y >= allPages[i].y) {
-        clickedPage = allPages[i].pageNum
-        pageOffset = allPages[i].y
-        pageScale = allPages[i].scale
-        break
-      }
+  }
+
+  // Handle zoom
+  const handleZoom = async (newScale) => {
+    const clampedScale = Math.max(0.5, Math.min(3, newScale))
+    console.log('Zooming to scale:', clampedScale)
+    setScale(clampedScale)
+    if (pdfDocument) {
+      await loadPage(currentPage)
     }
-    
-    // Calculate position relative to the clicked page in normalized coordinates
-    // This ensures consistent positioning regardless of zoom level
-    const relativeX = (x - 16) / pageScale // Subtract padding and normalize
-    const relativeY = (y - pageOffset - 16) / pageScale // Subtract padding and page offset, normalize
-    
-    console.log('Click coordinates:', { x, y, clickedPage, relativeX, relativeY, pageScale })
-    
-    if (mode === 'sign' && selectedSignature) {
-      // Add signature with size matching the actual signature
-      const newSignature = {
-        id: Date.now(),
-        type: 'signature',
-        page: clickedPage,
-        x: relativeX - selectedSignature.width / 2,
-        y: relativeY - selectedSignature.height / 2,
-        width: selectedSignature.width,
-        height: selectedSignature.height,
-        data: selectedSignature.data
-      }
-      
-      console.log('Adding new signature:', newSignature)
-      setTextElements(prev => {
-        const updated = [...prev, newSignature]
-        console.log('Text elements after adding signature:', updated)
-        return updated
-      })
-      setMode('view')
-      setSelectedSignature(null)
-      
-      // For signatures, we don't need editing state - they're saved immediately
-      console.log('Signature added and saved immediately')
-    } else if (mode === 'fill') {
-      // Add text element with size matching text
-      const newTextElement = {
-        id: Date.now(),
-        type: 'text',
-        page: clickedPage,
-        x: relativeX,
-        y: relativeY,
-        width: 80, // Smaller initial width
-        height: 20, // Smaller initial height
-        text: 'Click to edit',
-        fontSize: 11,
-        fontFamily: fontFamily
-      }
-      
-      console.log('Adding new text element:', newTextElement)
-      setTextElements(prev => [...prev, newTextElement])
-      setSelectedTextElement(newTextElement)
-      setEditingElement(newTextElement)
-      // Don't change mode to 'view' for new text elements - keep it as 'fill' so save button shows
-      // setMode('view')
-    }
-  }, [mode, selectedSignature, allPages, fontFamily, editingElement])
+  }
 
-  // Mouse state for drag and resize
-  const [isDragging, setIsDragging] = useState(false)
-  const [isResizing, setIsResizing] = useState(false)
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0, elementId: null })
-  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0, elementId: null })
-
-  // Handle mouse down for dragging
-  const handleMouseDown = useCallback((e, elementId, action = 'drag') => {
-    e.stopPropagation()
+  // Signature drawing functions
+  const startDrawing = (e) => {
+    e.preventDefault()
+    setIsDrawing(true)
+    const rect = signatureCanvasRef.current.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
     
-    if (action === 'drag') {
-      const element = textElements.find(el => el.id === elementId)
-      if (element) {
-        
-        setIsDragging(true)
-        setDragStart({
-          x: e.clientX,
-          y: e.clientY,
-          elementId
-        })
-      }
-    } else if (action === 'resize') {
-      setIsResizing(true)
-      const element = textElements.find(el => el.id === elementId)
-      if (element) {
-        setResizeStart({
-          x: e.clientX,
-          y: e.clientY,
-          width: element.width,
-          height: element.height,
-          elementId
-        })
-      }
-    }
-  }, [textElements])
+    // Start a new stroke - add a gap marker to separate strokes
+    setDrawingData(prev => [...prev, { x, y, type: 'start' }])
+  }
 
-  // Handle mouse move for dragging and resizing
-  const handleMouseMove = useCallback((e) => {
-    if (!isDragging && !isResizing) return
+  const draw = (e) => {
+    e.preventDefault()
+    if (!isDrawing) return
     
-    const container = containerRef.current
-    if (!container) return
+    const rect = signatureCanvasRef.current.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
     
-    const rect = container.getBoundingClientRect()
-    const scrollTop = container.scrollTop || 0
-    
-    if (isDragging && dragStart.elementId) {
-      // Handle dragging with simplified logic that works on all pages
-      const element = textElements.find(el => el.id === dragStart.elementId)
-      if (!element) return
-      
-      // Get the current page the element is on
-      const currentPage = allPages.find(p => p.pageNum === element.page)
-      if (!currentPage) return
-      
-      // Use the page's actual scale for coordinate calculations
-      const pageScale = currentPage.scale
-      const deltaX = (e.clientX - dragStart.x) / pageScale
-      const deltaY = (e.clientY - dragStart.y) / pageScale
-      
-      setTextElements(prev => prev.map(el => {
-        if (el.id === dragStart.elementId) {
-          // Calculate new position relative to the current page
-          const newX = el.x + deltaX
-          const newY = el.y + deltaY
-          
-          // Get page dimensions in PDF coordinates (original PDF size)
-          const pageWidth = currentPage.width / pageScale
-          const pageHeight = currentPage.height / pageScale
-          
-          // Clamp position within current page bounds
-          const clampedY = Math.max(0, Math.min(pageHeight - el.height, newY))
-          const clampedX = Math.max(0, Math.min(pageWidth - el.width, newX))
-          
-          return { ...el, x: clampedX, y: clampedY, page: el.page }
-        }
-        return el
-      }))
-      
-      setDragStart(prev => ({ ...prev, x: e.clientX, y: e.clientY }))
-    }
-    
-    if (isResizing && resizeStart.elementId) {
-      // Handle resizing
-      const element = textElements.find(el => el.id === resizeStart.elementId)
-      if (!element) return
-      
-      // Get the current page the element is on
-      const currentPage = allPages.find(p => p.pageNum === element.page)
-      if (!currentPage) return
-      
-      // Use the page's actual scale for coordinate calculations
-      const pageScale = currentPage.scale
-      const deltaX = (e.clientX - resizeStart.x) / pageScale
-      const deltaY = (e.clientY - resizeStart.y) / pageScale
-      
-      const newWidth = Math.max(50, resizeStart.width + deltaX)
-      const newHeight = Math.max(30, resizeStart.height + deltaY)
-      
-      setTextElements(prev => prev.map(el => {
-        if (el.id === resizeStart.elementId) {
-          const newElement = { ...el, width: newWidth, height: newHeight }
-          
-          // For text elements, update font size based on height
-          if (el.type === 'text') {
-            const newFontSize = Math.max(8, Math.min(72, Math.round(newHeight * 0.6)))
-            newElement.fontSize = newFontSize
-            
-            // Update header font size if this element is selected
-            if (selectedTextElement?.id === el.id) {
-              setFontSize(newFontSize)
-            }
-          }
-          
-          return newElement
-        }
-        return el
-      }))
-    }
-  }, [isDragging, isResizing, dragStart, resizeStart, allPages, selectedTextElement, textElements])
+    setDrawingData(prev => [...prev, { x, y, type: 'draw' }])
+  }
 
-  // Handle mouse up to stop dragging/resizing
-  const handleMouseUp = useCallback(() => {
-    if (isDragging && dragStart.elementId) {
-      // Log the final position of the dragged element
-      const element = textElements.find(el => el.id === dragStart.elementId)
-      if (element) {
-        
-      }
-    }
+  const stopDrawing = (e) => {
+    e.preventDefault()
+    setIsDrawing(false)
+  }
+
+  // Handle touch events for better mobile support
+  const handleTouchStart = (e) => {
+    e.preventDefault()
+    const touch = e.touches[0]
+    const rect = signatureCanvasRef.current.getBoundingClientRect()
+    const x = touch.clientX - rect.left
+    const y = touch.clientY - rect.top
     
-    setIsDragging(false)
-    setIsResizing(false)
+    setIsDrawing(true)
+    // Start a new stroke by adding to existing data instead of replacing
+    setDrawingData(prev => [...prev, { x, y, type: 'start' }])
+  }
+
+  const handleTouchMove = (e) => {
+    e.preventDefault()
+    if (!isDrawing) return
     
-    setDragStart({ x: 0, y: 0, elementId: null })
-    setResizeStart({ x: 0, y: 0, width: 0, height: 0, elementId: null })
-  }, [isDragging, dragStart, textElements])
-
-  // Handle drag over (for compatibility)
-  const handleDragOver = useCallback((event) => {
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-  }, [])
-
-  // Handle text element selection and editing
-  const handleTextElementClick = useCallback((element) => {
-    if (element.type === 'text') {
-      setSelectedTextElement(element)
-      setEditingElement(element)
-      setMode('fill')
-      setFontSize(element.fontSize)
-      setFontFamily(element.fontFamily)
-    }
-  }, [])
-
-  // Handle text input change
-  const handleTextChange = useCallback((elementId, newText) => {
-    console.log('Text change triggered:', { elementId, newText })
+    const touch = e.touches[0]
+    const rect = signatureCanvasRef.current.getBoundingClientRect()
+    const x = touch.clientX - rect.left
+    const y = touch.clientY - rect.top
     
-    setTextElements(prev => {
-      const updated = prev.map(element => {
-        if (element.id === elementId) {
-          const updatedElement = { ...element, text: newText }
-          
-          // Auto-resize text element based on content
-          if (element.type === 'text') {
-            const canvas = document.createElement('canvas')
-        const ctx = canvas.getContext('2d')
-            ctx.font = `${element.fontSize}px ${element.fontFamily}`
-            const textMetrics = ctx.measureText(newText)
-            
-            // Calculate new dimensions with some padding
-            const newWidth = Math.max(80, textMetrics.width + 20)
-            const newHeight = Math.max(20, element.fontSize + 10)
-            
-            updatedElement.width = newWidth
-            updatedElement.height = newHeight
-          }
-          
-          console.log('Updated element:', updatedElement)
-          return updatedElement
-        }
-        return element
-      })
-      console.log('All text elements after update:', updated)
-      return updated
-    })
+    setDrawingData(prev => [...prev, { x, y, type: 'draw' }])
+  }
+
+  const handleTouchEnd = (e) => {
+    e.preventDefault()
+    setIsDrawing(false)
+  }
+
+  // Save signature
+  const saveSignature = () => {
+    if (drawingData.length < 2) return
     
-    // Also update the editing element state
-    setEditingElement(prev => {
-      if (prev && prev.id === elementId) {
-        const updated = { ...prev, text: newText }
-        console.log('Updated editing element:', updated)
-        return updated
-      }
-      return prev
-    })
-    }, [])
-
-  // Handle text element resize
-  const handleTextResize = useCallback((elementId, newWidth, newHeight) => {
-    setTextElements(prev => prev.map(element => {
-      if (element.id === elementId) {
-        const updatedElement = { ...element, width: newWidth, height: newHeight }
-        
-        // For text elements, update font size based on height
-        if (element.type === 'text') {
-          const newFontSize = Math.max(8, Math.min(72, Math.round(newHeight * 0.6)))
-          updatedElement.fontSize = newFontSize
-          
-          // Update header font size if this element is selected
-          if (selectedTextElement?.id === element.id) {
-            setFontSize(newFontSize)
-          }
-        }
-        
-        return updatedElement
-      }
-      return element
-    }))
-  }, [selectedTextElement])
-
-  // Remove element
-  const removeElement = useCallback((elementId) => {
-    setTextElements(prev => prev.filter(element => element.id !== elementId))
-    if (selectedTextElement?.id === elementId) {
-      setSelectedTextElement(null)
-    }
-  }, [selectedTextElement])
-
-  // Create signature from pad
-  const createSignature = useCallback(() => {
-    if (!signaturePadData) return
+    const canvas = signatureCanvasRef.current
+    const dataURL = canvas.toDataURL()
     
     const newSignature = {
       id: Date.now(),
       name: `Signature ${signatures.length + 1}`,
-      data: signaturePadData,
-      width: 120,
-      height: 50
+      data: dataURL,
+      timestamp: new Date().toISOString()
     }
     
     setSignatures(prev => [...prev, newSignature])
-    setShowSignaturePad(false)
-    setSignaturePadData('')
-  }, [signaturePadData, signatures.length])
+    setSelectedSignature(newSignature)
+    clearSignatureCanvas()
+    setShowSignatureModal(false)
+  }
 
-  // Upload signature file
-  const handleSignatureUpload = useCallback(async (event) => {
+  // Upload signature
+  const handleSignatureUpload = async (event) => {
     const file = event.target.files[0]
-    if (!file || !file.type.startsWith('image/')) return
-    
+    if (!file || !file.type.startsWith('image/')) {
+      setError('Please select a valid image file')
+      return
+    }
+
     try {
       const reader = new FileReader()
       reader.onload = (e) => {
-        const img = new Image()
-        img.onload = () => {
-          // Calculate appropriate size for signature (max 120x50)
-          const maxWidth = 120
-          const maxHeight = 50
-          let finalWidth = img.width
-          let finalHeight = img.height
-          
-          if (img.width > maxWidth || img.height > maxHeight) {
-            const ratio = Math.min(maxWidth / img.width, maxHeight / img.height)
-            finalWidth = Math.round(img.width * ratio)
-            finalHeight = Math.round(img.height * ratio)
-          }
-          
-          const newSignature = {
-            id: Date.now(),
-            name: file.name.replace(/\.[^/.]+$/, ''),
-            data: e.target.result,
-            width: finalWidth,
-            height: finalHeight
-          }
-          
-          setSignatures(prev => [...prev, newSignature])
-          setShowUploadModal(false)
+        const newSignature = {
+          id: Date.now(),
+          name: file.name.replace(/\.[^/.]+$/, ''),
+          data: e.target.result,
+          timestamp: new Date().toISOString()
         }
-        img.src = e.target.result
+        
+        setSignatures(prev => [...prev, newSignature])
+        setSelectedSignature(newSignature)
+        setShowSignatureModal(false)
       }
       reader.readAsDataURL(file)
-    } catch (error) {
-      console.error('Error uploading signature:', error)
-      alert('Error uploading signature file')
+    } catch (err) {
+      setError('Failed to upload signature: ' + err.message)
     }
-  }, [])
+  }
 
-  // Helper function to convert viewer coordinates to PDF coordinates
-  const convertViewerToPdfCoordinates = useCallback((element, pageNum) => {
-    // Find the page info
-    const page = allPages.find(p => p.pageNum === pageNum)
-    if (!page) return element
+  // Clear signature canvas
+  const clearSignatureCanvas = () => {
+    setDrawingData([])
+    const canvas = signatureCanvasRef.current
+    if (canvas) {
+      const context = canvas.getContext('2d')
+      context.clearRect(0, 0, canvas.width, canvas.height)
+    }
+  }
+
+  // Add text element
+  const addTextElement = () => {
+    if (!editingText.trim()) return
     
-    // Get the original PDF dimensions from the loaded PDF
-    const originalPage = pdfDocument?.getPage(pageNum - 1)
-    if (!originalPage) return element
+    // Calculate better dimensions for text box
+    const minWidth = Math.max(200, editingText.length * editingFontSize * 0.6)
+    const minHeight = Math.max(80, editingFontSize * 2)
     
-    // Calculate the scale factor between viewer and original PDF
-    const viewerWidth = page.width
-    const viewerHeight = page.height
-    
-    // Get original PDF dimensions (these are in points, 72 points = 1 inch)
-    const originalWidth = originalPage.getViewport({ scale: 1.0 }).width
-    const originalHeight = originalPage.getViewport({ scale: 1.0 }).height
-    
-    // Calculate scale factors
-    const scaleX = originalWidth / viewerWidth
-    const scaleY = originalHeight / viewerHeight
-    
-    // Convert coordinates
-    const convertedElement = {
-      ...element,
-      x: element.x * scaleX,
-      y: element.y * scaleY,
-      width: element.width * scaleX,
-      height: element.height * scaleY,
-      fontSize: element.type === 'text' ? element.fontSize * scaleX : element.fontSize
+    const newText = {
+      id: Date.now(),
+      type: 'text', // Add missing type property
+      text: editingText,
+      x: textPosition.x,
+      y: textPosition.y,
+      fontSize: editingFontSize,
+      color: { r: 0, g: 0, b: 0 },
+      font: editingFontFamily === 'helvetica' ? 'helvetica' : 
+            editingFontFamily === 'times' ? 'times' : 
+            'courier',
+      width: minWidth,
+      height: minHeight,
+      page: currentPage // Track which page this element belongs to
     }
     
-    console.log('Coordinate conversion:', {
-      original: element,
-      converted: convertedElement,
-      scaleX,
-      scaleY,
-      originalWidth,
-      originalHeight,
-      viewerWidth,
-      viewerHeight
-    })
-    
-    return convertedElement
-  }, [allPages, pdfDocument])
+    console.log('Creating text element on page:', currentPage, newText)
+    setTextElements(prev => [...prev, newText])
+    setSelectedElement(newText)
+    setEditingText('')
+    setShowTextModal(false)
+  }
 
-  // Helper function to normalize coordinates for consistent positioning
-  const normalizeCoordinates = useCallback((x, y, pageNum) => {
-    const page = allPages.find(p => p.pageNum === pageNum)
-    if (!page) return { x, y }
-    
-    // Normalize coordinates to be independent of zoom level
-    // This ensures consistent positioning across different zoom levels
-    const normalizedX = x / page.scale
-    const normalizedY = y / page.scale
-    
-    return { x: normalizedX, y: normalizedY }
-  }, [allPages])
-
-  // Export signed PDF
-  const exportPDF = useCallback(async () => {
-    if (!pdfFile || !pdfDocument) return
-    
-    console.log('Starting export, textElements:', textElements)
-    
-    // Validate coordinates before export to ensure consistency
-    validateElementCoordinates()
-    
-    try {
-      const pdfBytes = await pdfFile.arrayBuffer()
-      const pdfDoc = await PDFDocument.load(pdfBytes)
-      
-      // Process all pages
-      for (let pageNum = 1; pageNum <= pdfDoc.getPageCount(); pageNum++) {
-        const page = pdfDoc.getPage(pageNum - 1)
-        const { width, height } = page.getSize()
-        
-        // Get elements for this page
-        const pageElements = textElements.filter(element => element.page === pageNum)
-        console.log(`Page ${pageNum} elements:`, pageElements)
-        
-        // Process elements sequentially to avoid async issues
-        for (const element of pageElements) {
-          console.log(`Processing element on page ${pageNum}:`, element)
-          
-          // Convert coordinates from viewer space to PDF space
-          const convertedElement = convertViewerToPdfCoordinates(element, pageNum)
-          
-          if (element.type === 'signature') {
-            try {
-              const imageBytes = await fetch(element.data).then(res => res.arrayBuffer())
-              const image = await pdfDoc.embedPng(imageBytes)
-              
-              // Use converted coordinates
-              const xPdf = convertedElement.x
-              const yPdf = convertedElement.y
-              const wPdf = convertedElement.width
-              const hPdf = convertedElement.height
-
-              console.log(`Drawing signature on page ${pageNum}:`, { xPdf, yPdf, wPdf, hPdf })
-
-              page.drawImage(image, {
-                x: xPdf,
-                y: height - yPdf - hPdf,
-                width: wPdf,
-                height: hPdf
-              })
-            } catch (error) {
-              console.error('Error embedding signature:', error)
-            }
-          } else if (element.type === 'text') {
-            try {
-              const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
-              
-              // Use converted coordinates
-              const xPdf = convertedElement.x
-              const yPdf = convertedElement.y
-              const sizePdf = convertedElement.fontSize
-
-              console.log(`Drawing text on page ${pageNum}:`, { xPdf, yPdf, sizePdf })
-
-              page.drawText(element.text, {
-                x: xPdf,
-                y: height - yPdf - sizePdf,
-                size: sizePdf,
-                font: font,
-                color: rgb(0, 0, 0)
-              })
-            } catch (error) {
-              console.error('Error drawing text:', error)
-            }
-          }
-        }
-      }
-      
-      console.log('Export completed successfully')
-      const modifiedPdfBytes = await pdfDoc.save()
-      const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `signed_${pdfFile.name}`
-      a.click()
-      
-      URL.revokeObjectURL(url)
-    } catch (error) {
-      console.error('Error exporting PDF:', error)
-      alert('Error exporting PDF')
-    }
-  }, [pdfFile, pdfDocument, textElements, convertViewerToPdfCoordinates, validateElementCoordinates])
-
-  // Clear signature pad
-  const clearSignaturePad = useCallback(() => {
-    if (signaturePadRef.current) {
-      const ctx = signaturePadRef.current.getContext('2d')
-      ctx.clearRect(0, 0, signaturePadRef.current.width, signaturePadRef.current.height)
-      setSignaturePadData('')
-    }
-  }, [])
-
-  // Handle signature pad drawing
-  const handleSignaturePadMouseDown = useCallback((event) => {
-    const canvas = signaturePadRef.current
-    const ctx = canvas.getContext('2d')
-    const rect = canvas.getBoundingClientRect()
-    
-    ctx.beginPath()
-    ctx.moveTo(event.clientX - rect.left, event.clientY - rect.top)
-    ctx.lineWidth = 3
-    ctx.strokeStyle = '#000'
-    ctx.lineCap = 'round'
-    
-    canvas.isDrawing = true
-    canvas.lastX = event.clientX - rect.left
-    canvas.lastY = event.clientY - rect.top
-  }, [])
-
-  const handleSignaturePadMouseMove = useCallback((event) => {
-    const canvas = signaturePadRef.current
-    if (!canvas.isDrawing) return
-    
-    const ctx = canvas.getContext('2d')
-    const rect = canvas.getBoundingClientRect()
-    const x = event.clientX - rect.left
-    const y = event.clientY - rect.top
-    
-    ctx.lineTo(x, y)
-    ctx.stroke()
-    
-    canvas.lastX = x
-    canvas.lastY = y
-  }, [])
-
-  const handleSignaturePadMouseUp = useCallback(() => {
-    const canvas = signaturePadRef.current
-    if (canvas.isDrawing) {
-      canvas.isDrawing = false
-      setSignaturePadData(canvas.toDataURL())
-    }
-  }, [])
-
-  // Effects
-  useEffect(() => {
-      renderPage()
-  }, [renderPage])
-
-  useEffect(() => {
-    if (pdfDocument) {
-      renderPage()
-    }
-  }, [pdfDocument, currentPage, scale, renderPage])
-
-  // Re-render all pages when scale changes
-  useEffect(() => {
-    if (pdfDocument && allPages.length > 0) {
-      renderAllPages(pdfDocument)
-    }
-  }, [scale, pdfDocument, renderAllPages])
-
-  // Ensure consistent positioning when zoom changes
-  useEffect(() => {
-    // When zoom changes, we need to ensure elements maintain their relative positions
-    // The coordinate system is already normalized, so no additional conversion is needed
-    console.log('Zoom level changed to:', scale, 'Elements will maintain their positions')
-  }, [scale])
-
-  // Function to validate and fix coordinate consistency
-  const validateElementCoordinates = useCallback(() => {
-    console.log('Validating element coordinates...')
-    
-    const validatedElements = textElements.map(element => {
-      const page = allPages.find(p => p.pageNum === element.page)
-      if (!page) return element
-      
-      // Ensure coordinates are within page bounds
-      const maxX = page.width / page.scale - element.width
-      const maxY = page.height / page.scale - element.height
-      
-      const validatedElement = {
-        ...element,
-        x: Math.max(0, Math.min(maxX, element.x)),
-        y: Math.max(0, Math.min(maxY, element.y))
-      }
-      
-      if (validatedElement.x !== element.x || validatedElement.y !== element.y) {
-        console.log('Fixed coordinates for element:', element.id, {
-          from: { x: element.x, y: element.y },
-          to: { x: validatedElement.x, y: validatedElement.y }
-        })
-      }
-      
-      return validatedElement
-    })
-    
-    if (JSON.stringify(validatedElements) !== JSON.stringify(textElements)) {
-      setTextElements(validatedElements)
-      console.log('Element coordinates validated and updated')
-    }
-  }, [textElements, allPages])
-
-  // Add global mouse event listeners for drag and resize
-  useEffect(() => {
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-    
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [handleMouseMove, handleMouseUp])
-
-  // Handle container resize
-  useEffect(() => {
-    if (!containerRef.current) return
-    
-    const resizeObserver = new ResizeObserver(() => {
-      if (pdfDocument) {
-        renderPage()
-      }
-    })
-    
-    resizeObserver.observe(containerRef.current)
-    
-    return () => {
-      resizeObserver.disconnect()
-    }
-  }, [pdfDocument, renderPage])
-
-  // File drop handlers
-  const handleFileDrop = useCallback((event) => {
-    event.preventDefault()
-    setIsDragging(false)
-    
-    const files = Array.from(event.dataTransfer.files)
-    if (files.length > 0) {
-      handleFileUpload(files[0])
-    }
-  }, [handleFileUpload])
-
-  const handleFileDragOver = useCallback((event) => {
-    event.preventDefault()
-    setIsDragging(true)
-  }, [])
-
-  const handleFileDragLeave = useCallback(() => {
-    setIsDragging(false)
-  }, [])
-
-  if (!pdfFile) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-12">
-            <h1 className="text-5xl font-bold text-gray-900 mb-4">Sign & Fill PDF</h1>
-            <p className="text-xl text-gray-600">Upload your PDF to add signatures, fill forms, and more</p>
-          </div>
-          
-          <div
-            className={`border-3 border-dashed rounded-2xl p-16 text-center transition-all duration-300 ${
-              isDragging 
-                ? 'border-blue-500 bg-blue-50 scale-105' 
-                : 'border-gray-300 bg-white hover:border-gray-400'
-            }`}
-            onDrop={handleFileDrop}
-            onDragOver={handleFileDragOver}
-            onDragLeave={handleFileDragLeave}
-          >
-            <div className="max-w-md mx-auto">
-              <div className="mx-auto h-20 w-20 text-gray-400 mb-6">
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-          </div>
-          
-              <h3 className="text-2xl font-semibold text-gray-800 mb-4">Drop your PDF here</h3>
-              <p className="text-gray-600 mb-8">or click to browse files</p>
-              
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf"
-                onChange={(e) => handleFileUpload(e.target.files[0])}
-                className="hidden"
-              />
-              
-            <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="px-8 py-4 bg-blue-600 text-white rounded-xl font-semibold text-lg hover:bg-blue-700 transition-colors duration-200 shadow-lg hover:shadow-xl"
-              >
-                Choose PDF File
-            </button>
-              
-              <p className="text-sm text-gray-500 mt-4">PDF files up to 10MB</p>
-          </div>
-        </div>
-          </div>
-                </div>
+  // Update text element
+  const updateTextElement = (id, updates) => {
+    setTextElements(prev => 
+      prev.map(el => el.id === id ? { ...el, ...updates } : el)
     )
   }
 
+  // Delete element
+  const deleteElement = (id) => {
+    setTextElements(prev => prev.filter(el => el.id !== id))
+    setSelectedElement(null)
+  }
+
+  // Handle PDF click for placing elements
+  const handlePdfClick = (e) => {
+    if (activeTab === 'sign' && selectedSignature) {
+      // Place signature
+      const rect = pdfContainerRef.current.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      
+      const newSignatureElement = {
+        id: Date.now(),
+        type: 'signature',
+        x: x,
+        y: y,
+        width: 200,
+        height: 100,
+        data: selectedSignature.data,
+        name: selectedSignature.name,
+        page: currentPage // Track which page this element belongs to
+      }
+      
+      console.log('Creating signature element on page:', currentPage, newSignatureElement)
+      setTextElements(prev => [...prev, newSignatureElement])
+      setSelectedElement(newSignatureElement)
+      setSelectedSignature(null)
+    } else if (activeTab === 'edit') {
+      // Show text input popup at click position
+      console.log('Edit tab active, opening text modal')
+      const rect = pdfContainerRef.current.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      
+      console.log('Click position:', { x, y, clientX: e.clientX, clientY: e.clientY, rect })
+      setEditingText('')
+      setTextPosition({ x, y })
+      setShowTextModal(true)
+      console.log('Text modal state set to true')
+    }
+  }
+
+  // Drag and resize functionality
+  const handleMouseDown = (e, element, action = 'drag') => {
+    e.stopPropagation()
+    
+    if (action === 'drag') {
+      setIsDragging(true)
+      setSelectedElement(element)
+      
+      const rect = pdfContainerRef.current.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      
+      setDragOffset({
+        x: x - element.x,
+        y: y - element.y
+      })
+    } else if (action === 'resize') {
+      setIsResizing(true)
+      setSelectedElement(element)
+      
+      const rect = pdfContainerRef.current.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      
+      setResizeStart({
+        x: x,
+        y: y,
+        width: element.width,
+        height: element.height
+      })
+    }
+  }
+
+  const handleMouseMove = (e) => {
+    if (!isDragging && !isResizing || !selectedElement) return
+    
+    const rect = pdfContainerRef.current.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    
+    if (isDragging) {
+      const newX = x - dragOffset.x
+      const newY = y - dragOffset.y
+      
+      updateTextElement(selectedElement.id, { x: newX, y: newY })
+    } else if (isResizing) {
+      const deltaX = x - resizeStart.x
+      const deltaY = y - resizeStart.y
+      
+      const newWidth = Math.max(50, resizeStart.width + deltaX)
+      const newHeight = Math.max(30, resizeStart.height + deltaY)
+      
+      updateTextElement(selectedElement.id, { 
+        width: newWidth, 
+        height: newHeight,
+        fontSize: Math.max(8, Math.min(72, Math.round(newHeight * 0.6)))
+      })
+    }
+  }
+
+  const handleMouseUp = () => {
+    setIsDragging(false)
+    setIsResizing(false)
+  }
+
+  // Process PDF with signatures and text
+  const processPdf = async () => {
+    if (!pdfFile || !textElements.length) {
+      setError('Please add some content before processing')
+      return
+    }
+
+    setIsLoading(true)
+    setError(null)
+    
+    try {
+      const arrayBuffer = await pdfFile.arrayBuffer()
+      const pdfDoc = await PDFDocument.load(arrayBuffer)
+      const pages = pdfDoc.getPages()
+      
+      // Group elements by page
+      const elementsByPage = {}
+      console.log('Processing elements:', textElements)
+      textElements.forEach(element => {
+        console.log(`Element ${element.id} (${element.type}) belongs to page ${element.page}`)
+        if (!elementsByPage[element.page]) {
+          elementsByPage[element.page] = []
+        }
+        elementsByPage[element.page].push(element)
+      })
+      console.log('Elements grouped by page:', elementsByPage)
+      
+      // Process each page that has elements
+      for (const [pageNum, elements] of Object.entries(elementsByPage)) {
+        const pageIndex = parseInt(pageNum) - 1
+        if (pageIndex >= 0 && pageIndex < pages.length) {
+          const page = pages[pageIndex]
+          
+          // Get PDF page dimensions
+          const pdfWidth = page.getWidth()
+          const pdfHeight = page.getHeight()
+          
+          // Get the PDF container dimensions (this is what we use for element positioning)
+          const container = pdfContainerRef.current
+          const containerRect = container.getBoundingClientRect()
+          const containerWidth = containerRect.width
+          const containerHeight = containerRect.height
+          
+          // Calculate scale factors to convert screen coordinates to PDF coordinates
+          const scaleX = pdfWidth / containerWidth
+          const scaleY = pdfHeight / containerHeight
+          
+          console.log('Coordinate conversion:', {
+            pdf: { width: pdfWidth, height: pdfHeight },
+            container: { width: containerWidth, height: containerHeight },
+            canvas: { 
+              width: canvasRef.current?.getBoundingClientRect().width,
+              height: canvasRef.current?.getBoundingClientRect().height
+            },
+            scale: { scaleX, scaleY }
+          })
+          
+          // Add elements to this specific page
+          for (const element of elements) {
+            console.log('Processing element:', element)
+            if (element.type === 'text') {
+              console.log('Processing text element:', element)
+              // Embed the appropriate font based on the font name
+              let font
+              if (element.font === 'helvetica') {
+                font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+              } else if (element.font === 'times') {
+                font = await pdfDoc.embedFont(StandardFonts.TimesRoman)
+              } else if (element.font === 'courier') {
+                font = await pdfDoc.embedFont(StandardFonts.Courier)
+              } else {
+                font = await pdfDoc.embedFont(StandardFonts.Helvetica) // default
+              }
+              
+              // Convert screen coordinates to PDF coordinates
+              const pdfX = element.x * scaleX
+              const pdfY = pdfHeight - (element.y * scaleY) - (element.fontSize * scaleY)
+              
+              console.log('Text coordinates:', { 
+                original: { x: element.x, y: element.y, fontSize: element.fontSize },
+                pdf: { x: pdfX, y: pdfY, size: element.fontSize * scaleY },
+                scale: { scaleX, scaleY }
+              })
+              
+              page.drawText(element.text, {
+                x: pdfX,
+                y: pdfY,
+                size: element.fontSize * scaleY,
+                color: rgb(element.color.r, element.color.g, element.color.b),
+                font: font
+              })
+              console.log('Text drawn successfully')
+            } else if (element.type === 'signature') {
+              // Convert signature data to image and embed
+              const response = await fetch(element.data)
+              const imageBytes = await response.arrayBuffer()
+              const image = await pdfDoc.embedPng(imageBytes)
+              
+              // Convert screen coordinates to PDF coordinates
+              const pdfX = element.x * scaleX
+              const pdfY = pdfHeight - (element.y * scaleY) - (element.height * scaleY)
+              const pdfWidth = element.width * scaleX
+              const pdfHeightImg = element.height * scaleY
+              
+              page.drawImage(image, {
+                x: pdfX,
+                y: pdfY,
+                width: pdfWidth,
+                height: pdfHeightImg
+              })
+            }
+          }
+        }
+      }
+      
+      const processedBytes = await pdfDoc.save()
+      const blob = new Blob([processedBytes], { type: 'application/pdf' })
+      
+      setProcessedPdf({
+        file: blob,
+        name: `signed_${pdfFile.name}`,
+        type: 'pdf'
+      })
+    } catch (err) {
+      setError('Failed to process PDF: ' + err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Download processed PDF
+  const downloadPdf = () => {
+    if (!processedPdf) return
+    
+    const url = URL.createObjectURL(processedPdf.file)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = processedPdf.name
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  // Clear all
+  const clearAll = () => {
+    setPdfFile(null)
+    setPdfDocument(null)
+    setCurrentPage(1)
+    setTotalPages(0)
+    setTextElements([])
+    setDrawingData([])
+    setSelectedElement(null)
+    setProcessedPdf(null)
+    setError(null)
+    clearSignatureCanvas()
+  }
+
+  // Effects
+  useEffect(() => {
+    if (pdfDocument && currentPage > 0) {
+      console.log('PDF document changed, loading initial page:', currentPage)
+      loadPage(currentPage)
+    }
+  }, [pdfDocument, currentPage])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Cancel any ongoing render operation
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel()
+        } catch (e) {
+          // Ignore cancellation errors
+        }
+        renderTaskRef.current = null
+      }
+      renderingRef.current = false
+    }
+  }, [])
+
+  // Render signature canvas
+  useEffect(() => {
+    if (signatureCanvasRef.current) {
+      const canvas = signatureCanvasRef.current
+      const context = canvas.getContext('2d')
+      
+      // Set canvas size with device pixel ratio for crisp rendering
+      const dpr = window.devicePixelRatio || 1
+      const rect = canvas.getBoundingClientRect()
+      
+      // Only resize if dimensions have changed
+      if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+        canvas.width = rect.width * dpr
+        canvas.height = rect.height * dpr
+        
+        // Scale the context to account for device pixel ratio
+        context.scale(dpr, dpr)
+        
+        // Set canvas CSS size
+        canvas.style.width = rect.width + 'px'
+        canvas.style.height = rect.height + 'px'
+      }
+      
+      // Clear canvas
+      context.clearRect(0, 0, rect.width, rect.height)
+      
+      // Only draw if we have drawing data
+      if (drawingData.length > 0) {
+        // Draw signature with improved line quality
+        context.strokeStyle = '#000'
+        context.lineWidth = 2
+        context.lineCap = 'round'
+        context.lineJoin = 'round'
+        context.imageSmoothingEnabled = true
+        context.imageSmoothingQuality = 'high'
+        
+        // Draw separate strokes for disconnected writing
+        let currentStroke = []
+        
+        for (let i = 0; i < drawingData.length; i++) {
+          const point = drawingData[i]
+          
+          if (point.type === 'start') {
+            // If we have a previous stroke, draw it
+            if (currentStroke.length > 1) {
+              context.beginPath()
+              context.moveTo(currentStroke[0].x, currentStroke[0].y)
+              for (let j = 1; j < currentStroke.length; j++) {
+                context.lineTo(currentStroke[j].x, currentStroke[j].y)
+              }
+              context.stroke()
+            }
+            // Start a new stroke
+            currentStroke = [point]
+          } else if (point.type === 'draw') {
+            // Add point to current stroke
+            currentStroke.push(point)
+          }
+        }
+        
+        // Draw the last stroke if it exists
+        if (currentStroke.length > 1) {
+          context.beginPath()
+          context.moveTo(currentStroke[0].x, currentStroke[0].y)
+          for (let j = 1; j < currentStroke.length; j++) {
+            context.lineTo(currentStroke[j].x, currentStroke[j].y)
+          }
+          context.stroke()
+        }
+      }
+    }
+  }, [drawingData])
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top Header */}
-      <div className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-6">
-              {/* File Info */}
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-              </div>
-                <div>
-                  <h2 className="font-semibold text-gray-900">{pdfFile.name}</h2>
-                  <p className="text-sm text-gray-500">Page {currentPage} of {numPages}</p>
+    <div className="min-h-screen bg-gray-50 p-6">
+      {/* Single Card Container */}
+      <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
+        {/* Card Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6 text-white">
+                  {/* eSign Heading */}
+          <div className="text-center mb-6">
+            <h1 className="text-4xl font-bold mb-2">eSign</h1>
+            <p className="text-blue-100 text-lg">Digital PDF Signing & Editing Tool</p>
+          </div>
+          
+          {/* Controls Row */}
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            {/* Left side - File info and editable filename */}
+            <div className="flex items-center space-x-4">
+              {pdfFile && (
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 bg-white bg-opacity-20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                    <FileText className="w-7 h-7 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <input
+                      type="text"
+                      value={pdfFile.name}
+                      onChange={(e) => {
+                        const newFile = new File([pdfFile], e.target.value, { type: pdfFile.type })
+                        setPdfFile(newFile)
+                      }}
+                      className="font-semibold text-white bg-transparent border-b-2 border-transparent hover:border-white focus:border-white focus:outline-none px-2 py-1 min-w-[200px] text-lg placeholder-white placeholder-opacity-80"
+                      placeholder="Enter filename..."
+                    />
+                    <p className="text-blue-100 text-sm mt-1">Page {currentPage} of {totalPages}</p>
+                  </div>
                 </div>
+              )}
+            </div>
+
+            {/* Center - Page navigation */}
+            <div className="flex items-center space-x-3">
+              {pdfFile && (
+                <div className="flex items-center space-x-2 bg-white bg-opacity-20 rounded-lg p-1 backdrop-blur-sm">
+                  <button
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage <= 1}
+                    className="p-2 hover:bg-white hover:bg-opacity-30 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-white"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <span className="text-sm font-mono bg-white bg-opacity-90 text-gray-900 px-4 py-2 rounded-md shadow-sm">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage >= totalPages}
+                    className="p-2 hover:bg-white hover:bg-opacity-30 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-white"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Right side - Action buttons and zoom controls */}
+            {/* Debug: Show current activeTab */}
+            <div className="text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded mr-2">
+              Tab: {activeTab}
             </div>
             
-
-
-              {/* Zoom Controls */}
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => setScale(prev => Math.max(0.5, prev - 0.2))}
-                  className="p-2 rounded-lg hover:bg-gray-100"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
-                  </svg>
-                </button>
-                
-                <span className="text-sm font-medium text-gray-700 w-16 text-center">
-                  {Math.round(scale * 100)}%
-                </span>
-                
-                  <button
-                  onClick={() => setScale(prev => Math.min(4, prev + 0.2))}
-                  className="p-2 rounded-lg hover:bg-gray-100"
-                  >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
-                </svg>
-                  </button>
-                
-                  <button
-                  onClick={() => setScale(2)}
-                  className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                  >
-                  Reset to 200%
-                  </button>
-          </div>
-        </div>
-        
-            {/* Action Buttons */}
-            <div className="flex items-center space-x-4">
-              {/* Sign Mode */}
-                      <button 
-                onClick={() => setMode(mode === 'sign' ? 'view' : 'sign')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  mode === 'sign'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            <div className="flex items-center space-x-3">
+              {/* Sign Button */}
+              <button
+                onClick={() => {
+                  console.log('Sign button clicked, setting activeTab to sign')
+                  setActiveTab('sign')
+                  setShowSignatureModal(true)
+                }}
+                className={`px-4 py-2.5 rounded-lg font-medium transition-all duration-200 ${
+                  activeTab === 'sign' 
+                    ? 'bg-white text-blue-600 shadow-lg' 
+                    : 'bg-white bg-opacity-20 text-white hover:bg-opacity-30 backdrop-blur-sm'
                 }`}
               >
-                Sign PDF
-            </button>
+                <PenTool className="w-4 h-4 inline mr-2" />
+                Sign
+              </button>
 
-              {/* Fill Mode */}
-          <button 
-                onClick={() => setMode(mode === 'fill' ? 'view' : 'fill')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  mode === 'fill'
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              {/* Edit Button */}
+              <button
+                onClick={() => {
+                  console.log('Edit button clicked, setting activeTab to edit')
+                  setActiveTab('edit')
+                }}
+                className={`px-4 py-2.5 rounded-lg font-medium transition-all duration-200 ${
+                  activeTab === 'edit' 
+                    ? 'bg-white text-green-600 shadow-lg' 
+                    : 'bg-white bg-opacity-20 text-white hover:bg-opacity-30 backdrop-blur-sm'
                 }`}
               >
-                Fill PDF
-          </button>
-
-              {/* Export */}
-              <button
-                onClick={exportPDF}
-                className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
-              >
-                Export PDF
+                <Type className="w-4 h-4 inline mr-2" />
+                Edit
               </button>
 
-              {/* Debug: Validate Coordinates */}
-              <button
-                onClick={validateElementCoordinates}
-                className="px-4 py-2 bg-yellow-500 text-white rounded-lg font-medium hover:bg-yellow-600 transition-colors text-sm"
-                title="Validate and fix element coordinates"
-              >
-                Fix Positions
-              </button>
-
-              {/* Debug: Show Coordinate Info */}
-              <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                Zoom: {Math.round(scale * 100)}% | Elements: {textElements.length}
-              </div>
-        </div>
-      </div>
-
-          {/* Mode-specific controls */}
-          {mode === 'sign' && (
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <div className="flex items-center space-x-4">
-                <span className="text-sm font-medium text-gray-700">Signature:</span>
-                
-                {/* Signature Dropdown */}
-                <div className="relative">
+              {/* Saved signatures dropdown */}
+              {signatures.length > 0 && (
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-medium text-blue-100">Saved:</span>
                   <select
                     value={selectedSignature?.id || ''}
                     onChange={(e) => {
                       const signature = signatures.find(s => s.id === parseInt(e.target.value))
                       setSelectedSignature(signature)
+                      setActiveTab('sign')
                     }}
-                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="px-3 py-2 border border-white border-opacity-30 rounded-lg focus:ring-2 focus:ring-white focus:border-transparent w-40 text-sm bg-white bg-opacity-20 text-white backdrop-blur-sm"
                   >
-                    <option value="">Select signature</option>
+                    <option value="" className="text-gray-900">Select Signature</option>
                     {signatures.map(signature => (
-                      <option key={signature.id} value={signature.id}>
+                      <option key={signature.id} value={signature.id} className="text-gray-900">
                         {signature.name}
                       </option>
                     ))}
                   </select>
                 </div>
+              )}
 
-                {/* Create Signature Button */}
+              {/* Process PDF Button */}
+              <button
+                onClick={processPdf}
+                disabled={isLoading || !textElements.length}
+                className="px-4 py-2.5 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4 inline mr-2" />
+                    Process
+                  </>
+                )}
+              </button>
+
+              {/* Download Button */}
+              {processedPdf && (
                 <button
-                  onClick={() => setShowSignaturePad(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  onClick={downloadPdf}
+                  className="px-4 py-2.5 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-all duration-200 shadow-lg"
                 >
-                  Create Sign
+                  <Download className="w-4 h-4 inline mr-2" />
+                  Download
                 </button>
+              )}
 
-                {/* Upload Signature Button */}
+              {/* Zoom controls */}
+              <div className="flex items-center space-x-2 bg-white bg-opacity-20 rounded-lg p-1 backdrop-blur-sm">
                 <button
-                  onClick={() => setShowUploadModal(true)}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  onClick={() => handleZoom(scale - 0.1)}
+                  className="p-2 hover:bg-white hover:bg-opacity-30 rounded-lg transition-colors text-white"
+                  disabled={scale <= 0.5}
                 >
-                  Upload Sign
+                  <Minimize2 className="w-4 h-4" />
+                </button>
+                <span className="text-sm font-mono bg-white bg-opacity-90 text-gray-900 px-3 py-2 rounded-md shadow-sm min-w-[60px] text-center">
+                  {Math.round(scale * 100)}%
+                </span>
+                <button
+                  onClick={() => handleZoom(scale + 0.1)}
+                  className="p-2 hover:bg-white hover:bg-opacity-30 rounded-lg transition-colors text-white"
+                  disabled={scale >= 3}
+                >
+                  <Maximize2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
-          )}
-
-          {mode === 'fill' && (
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <div className="flex items-center space-x-4">
-                <span className="text-sm font-medium text-gray-700">Text Options:</span>
-                
-                {/* Font Family */}
-                <select
-                  value={fontFamily}
-                  onChange={(e) => setFontFamily(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                >
-                  {fontOptions.map(font => (
-                    <option key={font.value} value={font.value}>{font.label}</option>
-                  ))}
-                </select>
-
-                {/* Font Size */}
-                <input
-                  type="number"
-                  value={fontSize}
-                  onChange={(e) => setFontSize(parseInt(e.target.value) || 14)}
-                  min="8"
-                  max="72"
-                  className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-                
-                <span className="text-sm text-gray-500">px</span>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="h-[calc(100vh-120px)]">
-        {/* PDF Viewer - Full Width */}
-        <div 
-          ref={containerRef}
-          className="h-full bg-gray-100 overflow-auto p-4"
-        >
-          <div className="flex justify-center items-start w-full">
-            <div className="relative bg-white shadow-lg rounded-lg overflow-hidden w-full max-w-6xl">
-              {isRendering && (
+      {/* Card Body - PDF Content */}
+      <div className="p-8">
+        {!pdfFile ? (
+          /* File Upload */
+          <div className="text-center py-20">
+            <Upload className="w-24 h-24 text-gray-400 mx-auto mb-6" />
+            <h3 className="text-2xl font-semibold text-gray-900 mb-4">Upload PDF to Get Started</h3>
+            <p className="text-gray-600 mb-8">Select a PDF file to add signatures and text</p>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-blue-600 text-white px-8 py-4 rounded-lg font-semibold text-lg hover:bg-blue-700 transition-colors"
+            >
+              Choose PDF File
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+          </div>
+        ) : (
+          /* PDF Preview - Full Width */
+          <div className="flex justify-center">
+            <div className="relative">
+              {/* Loading Indicator */}
+              {isPageLoading && (
                 <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
                   <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Rendering PDF...</p>
+                    <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-2" />
+                    <p className="text-gray-600">Loading page...</p>
                   </div>
                 </div>
               )}
               
-              {/* Continuous PDF View */}
-              <div 
-                className="relative"
-                style={{ height: `${totalHeight}px` }}
-                onClick={handleCanvasClick}
+              {/* PDF Container */}
+              <div
+                ref={pdfContainerRef}
+                className="relative bg-white shadow-lg cursor-crosshair"
+                onClick={handlePdfClick}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
               >
-                {allPages.map((page, index) => (
-                  <div
-                    key={page.pageNum}
-                    className="absolute left-0 right-0"
-                    style={{ 
-                      top: `${page.y}px`,
-                      width: '100%',
-                      height: `${page.height}px`
-                    }}
-                  >
-                                         <img
-                       src={page.canvas}
-                       alt={`Page ${page.pageNum}`}
-                       className="w-full h-full object-contain"
-                       style={{ cursor: mode === 'view' ? 'default' : 'crosshair' }}
-                     />
-                     
-                                         {/* Page number indicator */}
-                    <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm font-medium">
-                      Page {page.pageNum}
-                    </div>
-                    
-                    
-                     
-                     {/* Page border indicator */}
-                     <div className="absolute inset-0 border-2 border-transparent hover:border-blue-200 transition-colors pointer-events-none"></div>
-                     
-                     {/* Page break line */}
-                     {page.pageNum < numPages && (
-                       <div className="absolute -bottom-5 left-0 right-0 h-1 bg-gray-300"></div>
-                     )}
-                     
-                     {/* Page separator with shadow */}
-                     {page.pageNum < numPages && (
-                       <div className="absolute -bottom-20 left-0 right-0 h-16 bg-gradient-to-b from-gray-100 to-transparent"></div>
-                     )}
-                  </div>
-                ))}
-              </div>
-              
-              {/* Text Elements Overlay */}
-              {textElements.map(element => {
-                // Find the page this element belongs to
-                const page = allPages.find(p => p.pageNum === element.page)
-                if (!page) return null
+                {/* PDF Canvas */}
+                <canvas
+                  ref={canvasRef}
+                  className="block"
+                />
                 
-                return (
+                {/* Elements Overlay - Only show elements for current page */}
+                {textElements
+                  .filter(element => element.page === currentPage)
+                  .map(element => (
                   <div
                     key={element.id}
-                    data-element-id={element.id}
-                    className="absolute border-2 border-blue-500 bg-blue-50 bg-opacity-30"
+                    className={`absolute ${
+                      selectedElement?.id === element.id ? 'ring-2 ring-blue-500' : ''
+                    }`}
                     style={{
-                      left: element.x * page.scale + 16, // Add padding offset
-                      top: page.y + element.y * page.scale + 16, // Add padding offset
-                      width: element.width * page.scale,
-                      height: element.height * page.scale,
-                      cursor: 'move'
-                    }}
-                    onMouseDown={(e) => handleMouseDown(e, element.id, 'drag')}
-                    onClick={() => handleTextElementClick(element)}
-                    onDoubleClick={() => {
-                      if (element.type === 'text') {
-                        setEditingElement(element)
-                        setSelectedTextElement(element)
-                        setMode('fill')
-                        setFontSize(element.fontSize)
-                        setFontFamily(element.fontFamily)
-                      }
+                      left: element.x,
+                      top: element.y,
+                      width: element.width,
+                      height: element.height
                     }}
                   >
-                    {element.type === 'signature' && (
+                    {element.type === 'signature' ? (
                       <img
                         src={element.data}
                         alt="Signature"
                         className="w-full h-full object-contain"
+                        draggable={false}
                       />
-                    )}
-                    
-                    {element.type === 'text' && (
-                      <div className="w-full h-full flex items-center justify-center">
-                        {editingElement?.id === element.id ? (
-                          <input
-                            type="text"
-                            value={editingElement.text}
-                            onChange={(e) => handleTextChange(element.id, e.target.value)}
-                            className="w-full h-full bg-transparent border-none outline-none text-center"
-                            style={{ 
-                              fontSize: `${element.fontSize * page.scale}px`,
-                              fontFamily: element.fontFamily
-                            }}
-                            autoFocus
-                          />
-                        ) : (
-                          <span
-                            className="text-center select-none"
-                            style={{ 
-                              fontSize: `${element.fontSize * page.scale}px`,
-                              fontFamily: element.fontFamily
-                            }}
-                          >
-                            {element.text}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    
-                    {/* Save Button - Show when editing or when it's a new text element */}
-                    {(editingElement?.id === element.id || (element.type === 'text' && mode === 'fill')) && (
-                      <button
+                    ) : (
+                      <div
+                        className="w-full h-full flex items-center justify-center text-center select-none bg-white bg-opacity-90 border border-gray-300 rounded p-2 shadow-sm cursor-pointer hover:bg-opacity-95 transition-colors"
+                        style={{
+                          fontSize: element.fontSize,
+                          color: `rgb(${element.color.r * 255}, ${element.color.g * 255}, ${element.color.b * 255})`
+                        }}
                         onClick={(e) => {
                           e.stopPropagation()
-                          console.log('Save button clicked for element:', element)
-                          console.log('Current editingElement:', editingElement)
-                          
-                          // Save the element
-                          const elementToSave = editingElement || element
-                          console.log('Element to save:', elementToSave)
-                          
-                          setTextElements(prev => {
-                            const updated = prev.map(el => 
-                              el.id === elementToSave.id ? elementToSave : el
-                            )
-                            console.log('Updated text elements after save:', updated)
-                            return updated
-                          })
-                          setEditingElement(null)
-                          setSelectedTextElement(null)
-                          setMode('view')
-                          console.log('Element saved, edit mode exited')
+                          setEditingText(element.text)
+                          setEditingFontSize(element.fontSize)
+                          setEditingFontFamily(element.font || 'helvetica')
+                          setShowTextModal(true)
                         }}
-                        className="absolute -top-8 left-0 px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 transition-colors"
                       >
-                        Save
-                      </button>
+                        {element.text}
+                      </div>
                     )}
                     
                     {/* Drag Handle */}
                     <div 
-                      className="absolute -top-1 -left-1 w-4 h-4 bg-blue-500 cursor-move"
-                      onMouseDown={(e) => handleMouseDown(e, element.id, 'drag')}
-                    />
-                    
-                    {/* Remove Button */}
-                    <button
-                      onClick={(e) => {
+                      className="absolute -top-2 -left-2 w-6 h-6 bg-blue-500 cursor-move rounded shadow-lg"
+                      onMouseDown={(e) => {
                         e.stopPropagation()
-                        removeElement(element.id)
+                        handleMouseDown(e, element, 'drag')
                       }}
-                      className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
-                    >
-                      ×
-                    </button>
+                      onClick={(e) => e.stopPropagation()}
+                    />
                     
                     {/* Resize Handle */}
                     <div 
-                      className="absolute -bottom-1 -right-1 w-4 h-4 bg-blue-500 cursor-se-resize"
-                      onMouseDown={(e) => handleMouseDown(e, element.id, 'resize')}
+                      className="absolute -bottom-2 -right-2 w-6 h-6 bg-green-500 cursor-se-resize rounded shadow-lg"
+                      onMouseDown={(e) => {
+                        e.stopPropagation()
+                        handleMouseDown(e, element, 'resize')
+                      }}
+                      onClick={(e) => e.stopPropagation()}
                     />
+                    
+                    {/* Page Indicator */}
+                    <div className="absolute -top-8 -left-8 bg-gray-600 text-white text-xs px-2 py-1 rounded shadow-lg">
+                      P{element.page}
+                    </div>
+                    
+                    {/* Delete Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deleteElement(element.id)
+                      }}
+                      className="absolute -top-8 -right-8 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center text-sm hover:bg-red-600 transition-colors shadow-lg z-10"
+                    >
+                      ×
+                    </button>
                   </div>
-                )
-              })}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Signature Pad Modal */}
-      {showSignaturePad && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-semibold text-gray-900">Create Signature</h3>
-              <button
-                onClick={() => setShowSignaturePad(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-              </div>
-            
-            <div className="mb-6">
-              <canvas
-                ref={signaturePadRef}
-                width={600}
-                height={200}
-                className="w-full border-2 border-gray-300 rounded-lg cursor-crosshair"
-                onMouseDown={handleSignaturePadMouseDown}
-                onMouseMove={handleSignaturePadMouseMove}
-                onMouseUp={handleSignaturePadMouseUp}
-                onMouseLeave={handleSignaturePadMouseUp}
-              />
-            </div>
-            
-            <div className="flex items-center justify-between">
-                  <button 
-                onClick={clearSignaturePad}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                Clear
-                  </button>
-              
-              <div className="flex space-x-3">
-                  <button 
-                  onClick={() => setShowSignaturePad(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                  Cancel
-                  </button>
-                
+      {/* Signature Modal */}
+      <AnimatePresence>
+        {showSignatureModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-semibold text-gray-900">Create Signature</h3>
                 <button
-                  onClick={createSignature}
-                  disabled={!signaturePadData}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  onClick={() => setShowSignatureModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
                 >
-                  Save Signature
+                  <X className="w-6 h-6" />
                 </button>
               </div>
-                </div>
-                </div>
+              
+              {/* Mode Selection */}
+              <div className="flex space-x-2 mb-6">
+                <button
+                  onClick={() => setSignatureMode('draw')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    signatureMode === 'draw' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <PenTool className="w-4 h-4 inline mr-2" />
+                  Draw Signature
+                </button>
+                <button
+                  onClick={() => setSignatureMode('upload')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    signatureMode === 'upload' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <ImageIcon className="w-4 h-4 inline mr-2" />
+                  Upload Image
+                </button>
+              </div>
+              
+              {/* Drawing Mode */}
+              {signatureMode === 'draw' && (
+                <div className="mb-6">
+                  <div className="bg-white border-2 border-gray-300 rounded-lg p-4">
+                    <canvas
+                      ref={signatureCanvasRef}
+                      className="w-full h-40 border border-gray-200 rounded cursor-crosshair"
+                      onMouseDown={startDrawing}
+                      onMouseMove={draw}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      onTouchStart={handleTouchStart}
+                      onTouchMove={handleTouchMove}
+                      onTouchEnd={handleTouchEnd}
+                    />
+                  </div>
+                  <div className="flex space-x-2 mt-2">
+                    <button
+                      onClick={clearSignatureCanvas}
+                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <RotateCcw className="w-4 h-4 inline mr-2" />
+                      Clear
+                    </button>
+                  </div>
                 </div>
               )}
-
-      {/* Upload Signature Modal */}
-      {showUploadModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-semibold text-gray-900">Upload Signature</h3>
-              <button
-                onClick={() => setShowUploadModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-          </div>
-
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select PNG or JPG file
-              </label>
-                <input
-                  type="file"
-                accept="image/*"
-                onChange={handleSignatureUpload}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setShowUploadModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
+              
+              {/* Upload Mode */}
+              {signatureMode === 'upload' && (
+                <div className="mb-6">
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                    <ImageIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600 mb-4">Upload your signature image</p>
+                    <button
+                      onClick={() => signatureUploadRef.current?.click()}
+                      className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Choose Image
+                    </button>
+                    <input
+                      ref={signatureUploadRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleSignatureUpload}
+                      className="hidden"
+                    />
+                  </div>
+                </div>
+              )}
+              
+              {/* Action Buttons */}
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowSignatureModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                {signatureMode === 'draw' && (
+                  <button
+                    onClick={saveSignature}
+                    disabled={drawingData.length < 2}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <Save className="w-4 h-4 inline mr-2" />
+                    Save Signature
+                  </button>
+                )}
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Text Modal */}
+      <AnimatePresence>
+        {showTextModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-semibold text-gray-900">Add Text</h3>
+                <button
+                  onClick={() => setShowTextModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Text Content
+                  </label>
+                  <textarea
+                    value={editingText}
+                    onChange={(e) => setEditingText(e.target.value)}
+                    className="w-full h-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+                    placeholder="Enter your text here... You can resize this box by dragging the bottom-right corner"
+                    autoFocus
+                    rows={6}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Font Size
+                    </label>
+                    <select
+                      value={editingFontSize}
+                      onChange={(e) => setEditingFontSize(parseInt(e.target.value) || 16)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="12">12px</option>
+                      <option value="14">14px</option>
+                      <option value="16">16px</option>
+                      <option value="18">18px</option>
+                      <option value="20">20px</option>
+                      <option value="24">24px</option>
+                      <option value="28">28px</option>
+                      <option value="32">32px</option>
+                      <option value="36">36px</option>
+                      <option value="48">48px</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Font Family
+                    </label>
+                    <select
+                      value={editingFontFamily}
+                      onChange={(e) => setEditingFontFamily(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="helvetica">Helvetica</option>
+                      <option value="times">Times</option>
+                      <option value="courier">Courier</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setShowTextModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={addTextElement}
+                  disabled={!editingText.trim()}
+                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Plus className="w-4 h-4 inline mr-2" />
+                  Add Text
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Error Display */}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed top-4 right-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 z-50"
+        >
+          <AlertCircle className="w-5 h-5 text-red-600" />
+          <span className="text-red-700">{error}</span>
+          <button
+            onClick={() => setError(null)}
+            className="text-red-400 hover:text-red-600"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </motion.div>
+      )}
+
+      {/* Processed PDF Download */}
+      {processedPdf && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-4 right-4 p-6 bg-green-50 border border-green-200 rounded-lg shadow-lg"
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <CheckCircle className="w-6 h-6 text-green-600" />
+            <h3 className="text-lg font-semibold text-green-900">PDF Ready!</h3>
           </div>
-        </div>
+          
+          <p className="text-gray-600 mb-4">Your PDF has been processed successfully.</p>
+          
+          <div className="flex items-center gap-3">
+            <button
+              onClick={downloadPdf}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Download
+            </button>
+            
+            <button
+              onClick={() => setProcessedPdf(null)}
+              className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </motion.div>
       )}
     </div>
   )
