@@ -287,6 +287,8 @@ export default function FileProcessor({
     
     try {
       const result = await onProcess(files)
+      console.log('FileProcessor: onProcess returned:', result)
+      
       // If single PDF result, attach preview thumbnail
       if (result && result.type === 'pdf' && result.file instanceof Blob) {
         try {
@@ -296,7 +298,10 @@ export default function FileProcessor({
           console.warn('Could not generate output PDF preview:', e)
         }
       }
+      
+      console.log('FileProcessor: Setting processedFile to:', result)
       setProcessedFile(result)
+      
       // Set default custom filename based on the processed file
       if (result && result.name) {
         const nameWithoutExt = result.name.replace(/\.[^/.]+$/, '')
@@ -304,6 +309,7 @@ export default function FileProcessor({
         setCustomFilename(nameWithoutExt)
       }
     } catch (err) {
+      console.error('FileProcessor: Error in handleProcess:', err)
       setError(err.message || 'An error occurred while processing files')
     } finally {
       setIsProcessing(false)
@@ -318,10 +324,55 @@ export default function FileProcessor({
   const handleDownload = () => {
     if (!processedFile) return
 
+    console.log('FileProcessor: handleDownload called with:', processedFile)
+    
+    console.log('FileProcessor: processedFile.type:', processedFile.type)
+    console.log('FileProcessor: processedFile.files:', processedFile.files)
+    console.log('FileProcessor: processedFile.files?.length:', processedFile.files?.length)
+    
     if (processedFile.type === 'multiple' || processedFile.files?.length > 1) {
+      console.log('FileProcessor: Creating ZIP for multiple files')
+      console.log('FileProcessor: Files to be zipped:', processedFile.files)
+      
+      // Validate the files array before creating zip
+      if (!Array.isArray(processedFile.files) || processedFile.files.length === 0) {
+        console.error('FileProcessor: Invalid files array:', processedFile.files)
+        setError('Invalid files array for ZIP creation')
+        return
+      }
+      
+      // Additional validation - check each file
+      const validFiles = processedFile.files.filter(f => {
+        if (!f || !f.name || !f.file) {
+          console.warn('FileProcessor: File missing required properties:', f)
+          return false
+        }
+        if (!(f.file instanceof Blob)) {
+          console.warn('FileProcessor: File is not a Blob:', f)
+          return false
+        }
+        if (f.file.size === 0) {
+          console.warn('FileProcessor: File has 0 size:', f.name)
+          return false
+        }
+        return true
+      })
+      
+      if (validFiles.length === 0) {
+        console.error('FileProcessor: No valid files found for ZIP creation')
+        setError('No valid files found for ZIP creation')
+        return
+      }
+      
+      if (validFiles.length !== processedFile.files.length) {
+        console.warn('FileProcessor: Some files were invalid, using only valid ones:', validFiles.length, 'out of', processedFile.files.length)
+      }
+      
+      console.log('FileProcessor: Proceeding with ZIP creation for valid files:', validFiles.length)
       // Create zip for multiple files
-      createAndDownloadZip(processedFile.files)
+      createAndDownloadZip(validFiles)
     } else {
+      console.log('FileProcessor: Downloading single file')
       // Download single file with custom filename
       const filename = customFilename.trim() ? `${customFilename.trim()}${getFileExtension(processedFile.name)}` : processedFile.name
       downloadFile(processedFile.file, filename)
@@ -330,31 +381,167 @@ export default function FileProcessor({
 
   const createAndDownloadZip = async (files) => {
     try {
-      const JSZip = (await import('jszip')).default
+      console.log('FileProcessor: Creating zip with files:', files)
+      
+      // Validate input
+      if (!Array.isArray(files) || files.length === 0) {
+        throw new Error('No files provided for ZIP creation')
+      }
+      
+      console.log('FileProcessor: Files array validation passed, length:', files.length)
+      console.log('FileProcessor: Files structure:', files.map(f => ({ 
+        name: f.name, 
+        hasFile: !!f.file, 
+        fileType: f.file ? typeof f.file : 'undefined', 
+        isBlob: f.file instanceof Blob,
+        fileSize: f.file instanceof Blob ? f.file.size : 'N/A',
+        fileKeys: f.file ? Object.keys(f.file) : 'N/A'
+      })))
+      
+      // Additional validation - check for any invalid files
+      const invalidFiles = files.filter(f => !f || !f.name || !f.file || !(f.file instanceof Blob) || f.file.size === 0)
+      if (invalidFiles.length > 0) {
+        console.warn('FileProcessor: Found invalid files:', invalidFiles)
+        console.warn('FileProcessor: These files will be skipped during ZIP creation')
+      }
+      
+      let JSZip
+      try {
+        JSZip = (await import('jszip')).default
+        console.log('FileProcessor: JSZip imported successfully:', JSZip)
+      } catch (importErr) {
+        console.error('FileProcessor: Failed to import JSZip:', importErr)
+        throw new Error('Failed to load ZIP library')
+      }
       const zip = new JSZip()
       
-      files.forEach((file, index) => {
-        zip.file(file.name, file)
-      })
+      let filesAdded = 0
+      // Process each file and add it to the zip
+      for (const fileObj of files) {
+        try {
+          console.log('FileProcessor: Processing file object:', fileObj)
+          
+          // Validate file object structure
+          if (!fileObj || typeof fileObj !== 'object') {
+            console.warn('FileProcessor: Invalid file object:', fileObj)
+            continue
+          }
+          
+          if (!fileObj.name || !fileObj.file) {
+            console.warn('FileProcessor: File object missing name or file property:', fileObj)
+            continue
+          }
+          
+          console.log('FileProcessor: File object validation passed:', {
+            name: fileObj.name,
+            hasFile: !!fileObj.file,
+            fileType: typeof fileObj.file,
+            isBlob: fileObj.file instanceof Blob,
+            fileSize: fileObj.file instanceof Blob ? fileObj.file.size : 'N/A'
+          })
+          
+          // Ensure we have the file data as a Blob or ArrayBuffer
+          let fileData = fileObj.file
+          
+          // If fileObj.file is already a Blob, use it directly
+          if (fileData instanceof Blob) {
+            console.log('FileProcessor: Adding Blob to zip:', fileObj.name, 'Size:', fileData.size)
+            
+            // Additional validation
+            if (fileData.size === 0) {
+              console.warn('FileProcessor: Skipping file with 0 size:', fileObj.name)
+              continue
+            }
+            
+            try {
+              zip.file(fileObj.name, fileData)
+              filesAdded++
+              console.log('FileProcessor: Successfully added file to zip:', fileObj.name)
+            } catch (zipErr) {
+              console.error('FileProcessor: Error adding file to zip:', fileObj.name, zipErr)
+              continue
+            }
+          } else {
+            // If it's not a Blob, try to convert it
+            console.warn('File data is not a Blob:', fileObj)
+            continue
+          }
+        } catch (fileErr) {
+          console.error('Error adding file to zip:', fileObj.name, fileErr)
+          // Continue with other files instead of failing completely
+        }
+      }
+      
+      // Check if we have any files in the zip
+      console.log('FileProcessor: Files in zip:', Object.keys(zip.files))
+      console.log('FileProcessor: Total files added:', filesAdded)
+      
+      // Validate zip contents
+      const zipFileNames = Object.keys(zip.files)
+      console.log('FileProcessor: Zip file names:', zipFileNames)
+      
+      if (filesAdded === 0) {
+        throw new Error('No files were successfully added to the zip')
+      }
+      
+      if (zipFileNames.length === 0) {
+        throw new Error('ZIP file appears to be empty after adding files')
+      }
       
       const content = await zip.generateAsync({ type: 'blob' })
+      console.log('FileProcessor: Generated zip size:', content.size)
+      
+      // Validate the generated zip
+      if (!(content instanceof Blob)) {
+        throw new Error('Failed to generate valid ZIP blob')
+      }
+      
+      if (content.size === 0) {
+        throw new Error('Generated ZIP file is empty')
+      }
+      
+      // Additional validation - check zip contents
+      console.log('FileProcessor: Final zip validation - content type:', content.type)
+      console.log('FileProcessor: Final zip validation - content size:', content.size)
+      
       const zipFilename = customFilename.trim() ? `${customFilename.trim()}.zip` : 'processed_files.zip'
+      console.log('FileProcessor: Downloading zip with filename:', zipFilename)
       downloadFile(content, zipFilename)
     } catch (err) {
       console.error('Error creating zip:', err)
-      setError('Error creating zip file')
+      setError('Error creating zip file: ' + err.message)
     }
   }
 
   const downloadFile = (file, filename) => {
-    const url = URL.createObjectURL(file)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    try {
+      console.log('FileProcessor: Downloading file:', filename, 'Size:', file.size, 'Type:', file.type)
+      
+      // Validate the file before download
+      if (!(file instanceof Blob)) {
+        throw new Error('File is not a valid Blob')
+      }
+      
+      if (file.size === 0) {
+        throw new Error('File size is 0')
+      }
+      
+      console.log('FileProcessor: File validation passed, creating download link')
+      const url = URL.createObjectURL(file)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      
+      console.log('FileProcessor: Download link created, triggering download')
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      console.log('FileProcessor: Download initiated successfully')
+    } catch (err) {
+      console.error('FileProcessor: Error during download:', err)
+      setError('Error during download: ' + err.message)
+    }
   }
 
   const clearAll = () => {

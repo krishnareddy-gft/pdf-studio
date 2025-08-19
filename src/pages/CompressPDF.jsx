@@ -96,11 +96,34 @@ export default function CompressPDF({ navigate }) {
         const blob = new Blob([compressedBytes], { type: 'application/pdf' })
         reportRows.push({ name: file.name, original: file.size, compressed: blob.size })
         
-        results.push({
+        const resultObj = {
           file: blob,
           name: `compressed_${file.name}`,
           type: 'pdf'
+        }
+        console.log('CompressPDF: Adding result:', resultObj)
+        console.log('CompressPDF: Result blob size:', blob.size, 'Type:', blob.type)
+        console.log('CompressPDF: Result object keys:', Object.keys(resultObj))
+        console.log('CompressPDF: Result file property type:', typeof resultObj.file)
+        console.log('CompressPDF: Result file instanceof Blob:', resultObj.file instanceof Blob)
+        console.log('CompressPDF: Result file properties:', {
+          size: resultObj.file.size,
+          type: resultObj.file.type,
+          lastModified: resultObj.file.lastModified
         })
+        
+        // Validate the blob before adding
+        if (!(blob instanceof Blob)) {
+          console.error('CompressPDF: Error - blob is not a Blob instance:', blob)
+          throw new Error('Failed to create valid PDF blob')
+        }
+        
+        if (blob.size === 0) {
+          console.error('CompressPDF: Error - blob size is 0')
+          throw new Error('Failed to create valid PDF blob - size is 0')
+        }
+        
+        results.push(resultObj)
       }
       
       setReport(reportRows)
@@ -109,12 +132,37 @@ export default function CompressPDF({ navigate }) {
       if (results.length === 1) {
         return { ...results[0], meta: { report: reportRows[0] } }
       } else {
-        return {
+        console.log('CompressPDF: Returning multiple files:', results)
+        
+        // Validate all results before returning
+        const validResults = results.filter(result => {
+          if (!result || !result.file || !(result.file instanceof Blob)) {
+            console.error('CompressPDF: Invalid result found:', result)
+            return false
+          }
+          if (result.file.size === 0) {
+            console.error('CompressPDF: Result with 0 size found:', result)
+            return false
+          }
+          return true
+        })
+        
+        if (validResults.length === 0) {
+          throw new Error('No valid compressed files were created')
+        }
+        
+        if (validResults.length !== results.length) {
+          console.warn('CompressPDF: Some results were invalid, using only valid ones:', validResults.length, 'out of', results.length)
+        }
+        
+        const returnValue = {
           type: 'multiple',
-          files: results,
+          files: validResults,
           name: 'compressed_pdfs.zip',
           meta: { report: reportRows }
         }
+        console.log('CompressPDF: Final return value:', returnValue)
+        return returnValue
       }
     } catch (error) {
       throw new Error('Failed to compress PDF: ' + error.message)
