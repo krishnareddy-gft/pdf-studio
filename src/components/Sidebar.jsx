@@ -73,49 +73,8 @@ const categories = [
 
 ]
 
-export default function Sidebar({ onNavigate, active, isMobile, isOpen, onClose }) {
+export default function Sidebar({ onNavigate, active }) {
   const [openCategory, setOpenCategory] = useState('home')
-
-  // Mobile sidebar
-  if (isMobile) {
-    return (
-      <AnimatePresence>
-        {isOpen && (
-          <motion.aside
-            initial={{ x: -300 }}
-            animate={{ x: 0 }}
-            exit={{ x: -300 }}
-            transition={{ type: 'tween', duration: 0.3 }}
-            className="fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-white to-gray-50 border-r border-zinc-200 z-50 shadow-2xl"
-          >
-            <div className="p-3 overflow-y-auto h-full">
-              {categories.map(cat => (
-                <div key={cat.key} className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="font-semibold text-gray-800 text-sm">{cat.label}</h3>
-                  </div>
-                  <nav className="flex flex-col gap-1">
-                    {cat.items.map(item => (
-                      <button
-                        key={item.key}
-                        onClick={() => onNavigate(item.key)}
-                        className={`text-left px-2 py-1.5 rounded-lg hover:bg-blue-50 transition ${
-                          active === item.key ? 'bg-blue-100 text-blue-700 border-l-2 border-blue-600' : 'hover:text-blue-600'
-                        }`}
-                      >
-                        <div className="font-medium text-xs">{item.label}</div>
-                        <div className="text-xs text-gray-500">{item.desc}</div>
-                      </button>
-                    ))}
-                  </nav>
-                </div>
-              ))}
-            </div>
-          </motion.aside>
-        )}
-      </AnimatePresence>
-    )
-  }
 
   // Desktop sidebar - Much thinner with compact layout
   return (
@@ -170,12 +129,12 @@ export default function Sidebar({ onNavigate, active, isMobile, isOpen, onClose 
                           <button
                             key={item.key}
                             onClick={() => onNavigate(item.key)}
-                            className={`text-left px-2 py-1.5 rounded-md hover:bg-blue-50 transition-colors ${
+                            className={`text-left px-2 py-1.5 rounded-lg hover:bg-blue-50 transition ${
                               active === item.key ? 'bg-blue-100 text-blue-700 border-l-2 border-blue-600' : 'hover:text-blue-600'
                             }`}
                           >
-                            <div className="font-medium text-xs leading-tight">{item.label}</div>
-                            <div className="text-xs text-gray-500 mt-0.5 leading-tight">{item.desc}</div>
+                            <div className="font-medium text-xs">{item.label}</div>
+                            <div className="text-xs text-gray-500">{item.desc}</div>
                           </button>
                         ))}
                       </nav>

@@ -76,20 +76,8 @@ const routes = {
 
 function AppContent() {
   const [route, setRoute] = useState('home')
-  const [isMobile, setIsMobile] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024)
-    }
-    
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
 
   const Page = routes[route] || Home
 
@@ -101,14 +89,8 @@ function AppContent() {
       <div className="flex flex-1">
         {/* Sidebar */}
         <Sidebar 
-          onNavigate={(newRoute) => {
-            setRoute(newRoute)
-            if (isMobile) setSidebarOpen(false)
-          }} 
+          onNavigate={setRoute} 
           active={route}
-          isMobile={isMobile}
-          isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
         />
 
         {/* Main Content */}
@@ -117,14 +99,6 @@ function AppContent() {
             <Page navigate={setRoute} />
           </div>
         </main>
-
-        {/* Mobile Overlay */}
-        {isMobile && sidebarOpen && (
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
       </div>
 
       {/* Authentication Modal */}
