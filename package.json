@@ -9,7 +9,6 @@
     "preview": "vite preview",
     "build:pwa": "vite build && npm run generate-icons",
     "generate-icons": "node scripts/generate-icons.js",
-    "build:mobile": "npm run build && npx cap sync",
     "test": "echo \"No tests specified\" && exit 0"
   },
   "dependencies": {
@@ -41,7 +40,6 @@
     "compress",
     "edit",
     "pwa",
-    "mobile",
     "react",
     "vite"
   ],
